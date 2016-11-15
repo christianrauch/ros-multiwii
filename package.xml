@@ -39,6 +39,8 @@
   <!--   <run_depend>message_runtime</run_depend> -->
   <!-- Use test_depend for packages you need only for testing: -->
   <!--   <test_depend>gtest</test_depend> -->
+  <build_depend>msp</build_depend>
+  <run_depend>msp</run_depend>
   <buildtool_depend>catkin</buildtool_depend>
 
 

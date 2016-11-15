@@ -17,6 +17,7 @@ find_package(catkin REQUIRED COMPONENTS
 find_package(PkgConfig)
 pkg_check_modules(msp REQUIRED msp)
 include_directories(${msp_INCLUDE_DIRS})
+link_directories(${msp_LIBRARY_DIRS})
 
 pkg_check_modules(Eigen REQUIRED eigen3)
 include_directories(${Eigen_INCLUDE_DIRS})
