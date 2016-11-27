@@ -2,6 +2,8 @@
 
 #include <std_msgs/UInt16.h>
 #include <std_msgs/UInt32.h>
+#include <std_msgs/UInt8MultiArray.h>
+#include <std_msgs/Bool.h>
 
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/Vector3.h>
@@ -12,23 +14,43 @@
 
 #include <mavros_msgs/RCIn.h>
 #include <mavros_msgs/RCOut.h>
+#include <mavros_msgs/OverrideRCIn.h>
 
 #include <msp/FlightController.hpp>
-#include <msp/fcu_msg.hpp>
+#include <msp/msp_msg.hpp>
 #include <msp/msg_print.hpp>
 
 #include <Eigen/Geometry>
 
-float deg2rad(const float deg) {
+#include <msp/msg_print.hpp>
+
+double deg2rad(const double deg) {
     return deg/180.0 * M_PI;
 }
 
 class MultiWiiNode {
+private:
+    ros::NodeHandle nh;
+    fcu::FlightController &fcu;
+
+    ros::Publisher imu_pub, magn_pub;
+    ros::Publisher pose_stamped_pub;
+    ros::Publisher rpy_pub;
+    ros::Publisher rc_in_pub, rc_out_pub;
+    ros::Publisher motors_pub;
+    ros::Publisher arm_pub, lifetime_pub;
+    ros::Publisher battery_pub;
+    ros::Publisher boxes_pub;
+    ros::Publisher arm_status_pub;
+
+    ros::Subscriber rc_in_sub;
+
 public:
-    MultiWiiNode() {
-    }
+
+    MultiWiiNode(fcu::FlightController &fcu) : fcu(fcu) { }
 
     void setup() {
+        // publisher
         imu_pub = nh.advertise<sensor_msgs::Imu>("imu", 1);
         magn_pub = nh.advertise<sensor_msgs::MagneticField>("magnetometer", 1);
         pose_stamped_pub = nh.advertise<geometry_msgs::PoseStamped>("pose", 1);
@@ -39,34 +61,48 @@ public:
         arm_pub = nh.advertise<std_msgs::UInt16>("arm_counter",1);
         lifetime_pub = nh.advertise<std_msgs::UInt32>("lifetime",1);
         battery_pub = nh.advertise<sensor_msgs::BatteryState>("battery",1);
+        boxes_pub = nh.advertise<std_msgs::UInt8MultiArray>("boxes",1);
+        arm_status_pub = nh.advertise<std_msgs::Bool>("armed",1);
+
+        // subscriber
+        rc_in_sub = nh.subscribe("rc/override", 1, &MultiWiiNode::rc_override, this);
     }
 
-    void onImu(const fcu::Imu *imu) {
+
+    ////////////////////////////////////////////////////////////////////////////
+    /// callbacks for published messages
+
+    void onImu(const msp::Imu &imu) {
+        //std::cout<<imu;
         sensor_msgs::Imu imu_msg;
 
         imu_msg.header.stamp = ros::Time::now();
         imu_msg.header.frame_id = "imu";
 
-        imu_msg.linear_acceleration.x = imu->acc[0];
-        imu_msg.linear_acceleration.y = imu->acc[1];
-        imu_msg.linear_acceleration.z = imu->acc[2];
+        imu_msg.linear_acceleration.x = imu.acc[0];
+        imu_msg.linear_acceleration.y = imu.acc[1];
+        imu_msg.linear_acceleration.z = imu.acc[2];
 
-        imu_msg.angular_velocity.x = imu->gyro[0]*M_PI/180.0;
-        imu_msg.angular_velocity.y = imu->gyro[1]*M_PI/180.0;
-        imu_msg.angular_velocity.z = imu->gyro[2]*M_PI/180.0;
+        imu_msg.angular_velocity.x = imu.gyro[0]*M_PI/180.0;
+        imu_msg.angular_velocity.y = imu.gyro[1]*M_PI/180.0;
+        imu_msg.angular_velocity.z = imu.gyro[2]*M_PI/180.0;
 
-        //geometry_msgs::Vector3 mag_msg;
         sensor_msgs::MagneticField mag_msg;
         mag_msg.header.stamp = ros::Time::now();
-        mag_msg.magnetic_field.x = imu->magn[0];
-        mag_msg.magnetic_field.y = imu->magn[1];
-        mag_msg.magnetic_field.z = imu->magn[2];
+        mag_msg.magnetic_field.x = imu.magn[0];
+        mag_msg.magnetic_field.y = imu.magn[1];
+        mag_msg.magnetic_field.z = imu.magn[2];
 
-        const Eigen::Vector3f magn(imu->magn[0], imu->magn[1], imu->magn[2]);
-        const Eigen::Vector3f lin_acc(imu->acc[0], imu->acc[1], imu->acc[2]);
+        const Eigen::Vector3f magn(imu.magn[0], imu.magn[1], imu.magn[2]);
+        const Eigen::Vector3f lin_acc(imu.acc[0], imu.acc[1], imu.acc[2]);
 
-        Eigen::Quaternionf orientation;
-        orientation.setFromTwoVectors(magn, lin_acc);
+        // http://www.camelsoftware.com/2016/02/20/imu-maths/
+        Eigen::Matrix3f rot;
+        rot.col(0) = lin_acc.normalized();
+        rot.col(1) = rot.col(0).cross(magn.normalized());
+        rot.col(2) = rot.col(1).cross(rot.col(0));
+
+        const Eigen::Quaternionf orientation(rot);
 
         geometry_msgs::Quaternion quat;
         quat.x = orientation.x();
@@ -80,12 +116,12 @@ public:
         magn_pub.publish(mag_msg);
     }
 
-    void onAttitude(const fcu::Attitude *attitude) {
+    void onAttitude(const msp::Attitude &attitude) {
         // r,p,y to rotation matrix
         Eigen::Matrix3f rot;
-        rot = Eigen::AngleAxisf(deg2rad(attitude->ang_x), Eigen::Vector3f::UnitX())
-            * Eigen::AngleAxisf(deg2rad(attitude->ang_y),  Eigen::Vector3f::UnitY())
-            * Eigen::AngleAxisf(deg2rad(attitude->heading), Eigen::Vector3f::UnitZ());
+        rot = Eigen::AngleAxisf(deg2rad(attitude.ang_x), Eigen::Vector3f::UnitX())
+            * Eigen::AngleAxisf(deg2rad(attitude.ang_y),  Eigen::Vector3f::UnitY())
+            * Eigen::AngleAxisf(deg2rad(attitude.heading), Eigen::Vector3f::UnitZ());
 
         const Eigen::Quaternionf quat(rot);
 
@@ -100,102 +136,127 @@ public:
         pose_stamped_pub.publish(pose_stamped);
 
         geometry_msgs::Vector3 rpy;
-        rpy.x = attitude->ang_x;
-        rpy.y = attitude->ang_y;
-        rpy.z = attitude->heading;
+        rpy.x = attitude.ang_x;
+        rpy.y = attitude.ang_y;
+        rpy.z = attitude.heading;
         rpy_pub.publish(rpy);
     }
 
-    void onRc(const msp::Rc *rc) {
+    void onRc(const msp::Rc &rc) {
         mavros_msgs::RCIn rc_msg;
         rc_msg.header.stamp = ros::Time::now();
-        rc_msg.channels.push_back(rc->roll);
-        rc_msg.channels.push_back(rc->pitch);
-        rc_msg.channels.push_back(rc->yaw);
-        rc_msg.channels.push_back(rc->throttle);
-        rc_msg.channels.push_back(rc->aux1);
-        rc_msg.channels.push_back(rc->aux2);
-        rc_msg.channels.push_back(rc->aux3);
-        rc_msg.channels.push_back(rc->aux4);
+        rc_msg.channels.push_back(rc.roll);
+        rc_msg.channels.push_back(rc.pitch);
+        rc_msg.channels.push_back(rc.yaw);
+        rc_msg.channels.push_back(rc.throttle);
+        rc_msg.channels.push_back(rc.aux1);
+        rc_msg.channels.push_back(rc.aux2);
+        rc_msg.channels.push_back(rc.aux3);
+        rc_msg.channels.push_back(rc.aux4);
 
         rc_in_pub.publish(rc_msg);
     }
 
-    void onServo(const msp::Servo *servo) {
+    void onServo(const msp::Servo &servo) {
         mavros_msgs::RCOut rc;
-        for(const uint16_t s : servo->servo) {
+        for(const uint16_t s : servo.servo) {
             rc.channels.push_back(s);
         }
         rc_out_pub.publish(rc);
     }
 
-    void onMotor(const msp::Motor *motor) {
+    void onMotor(const msp::Motor &motor) {
         mavros_msgs::RCOut motor_out;
-        for(const uint16_t m : motor->motor) {
+        for(const uint16_t m : motor.motor) {
             motor_out.channels.push_back(m);
         }
         motors_pub.publish(motor_out);
     }
 
-    void onMisc(const fcu::Misc *misc) {
+    void onMisc(const msp::Misc &misc) {
         std_msgs::UInt16 arm;
-        arm.data = misc->arm;
+        arm.data = misc.arm;
         arm_pub.publish(arm);
 
         std_msgs::UInt32 lifetime;
-        lifetime.data = misc->lifetime;
+        lifetime.data = misc.lifetime;
         lifetime_pub.publish(lifetime);
     }
 
-    void onAnalog(const fcu::Analog *analog) {
+    void onAnalog(const msp::Analog &analog) {
+        //std::cout<<analog;
         sensor_msgs::BatteryState battery;
         battery.header.stamp = ros::Time::now();
-        battery.voltage = analog->vbat;
-        battery.current = analog->amperage;
+        battery.voltage = analog.vbat;
+        battery.current = analog.amperage;
 
         battery_pub.publish(battery);
     }
 
-private:
-    ros::NodeHandle nh;
-    ros::Publisher imu_pub, magn_pub;
-    ros::Publisher pose_stamped_pub;
-    ros::Publisher rpy_pub;
-    ros::Publisher rc_in_pub, rc_out_pub;
-    ros::Publisher motors_pub;
-    ros::Publisher arm_pub, lifetime_pub;
-    ros::Publisher battery_pub;
+    void onStatus(const msp::Status &status) {
+        //std::cout<<status;
+
+        std_msgs::Bool armed;
+        armed.data = status.active_box_id.count(0);
+
+        std_msgs::UInt8MultiArray box_ids;
+        for(const uint b : status.active_box_id) {
+            box_ids.data.push_back(b);
+        }
+
+        boxes_pub.publish(box_ids);
+        arm_status_pub.publish(armed);
+    }
+
+
+    ////////////////////////////////////////////////////////////////////////////
+    /// callbacks for subscribed messages
+
+    void rc_override(const mavros_msgs::OverrideRCIn &rc) {
+        std::cout<<"overriding RC:"<<std::endl;
+        std::cout<<rc.channels[0]<<" "<<rc.channels[1]<<" "<<rc.channels[2]<<" "<<rc.channels[3]<<std::endl;
+        fcu.setRc(rc.channels[0], rc.channels[1], rc.channels[2], rc.channels[3]);
+    }
 };
 
 int main(int argc, char **argv) {
     ros::init(argc, argv, "MultiWii");
 
-    MultiWiiNode node;
-
-    // register publisher
-    node.setup();
-
     // connect to flight controller
     fcu::FlightController fcu("/dev/ttyUSB0");
-    sleep(8);
-
     fcu.setAcc1G(512);
     fcu.setGyroUnit(1/4096.0);
     fcu.setMagnGain(1090/100.0);
     fcu.setStandardGravity(9.80665);
+    fcu.populate_database();
+
+    fcu.waitForConnection();
 
     ROS_INFO("MSP ready");
+    std::cout<<"MSP ready"<<std::endl;
 
-    fcu.subscribe(msp::ID::MSP_RAW_IMU, &MultiWiiNode::onImu, &node);
-    fcu.subscribe(msp::ID::MSP_ATTITUDE, &MultiWiiNode::onAttitude, &node);
-    fcu.subscribe(msp::ID::MSP_RC, &MultiWiiNode::onRc, &node);
-    fcu.subscribe(msp::ID::MSP_SERVO, &MultiWiiNode::onServo, &node);
-    fcu.subscribe(msp::ID::MSP_MOTOR, &MultiWiiNode::onMotor, &node);
-    fcu.subscribe(msp::ID::MSP_MISC, &MultiWiiNode::onMisc, &node);
-    fcu.subscribe(msp::ID::MSP_ANALOG, &MultiWiiNode::onAnalog, &node);
+    MultiWiiNode node(fcu);
+
+    // register publisher
+    node.setup();
+
+    fcu.subscribe(&MultiWiiNode::onImu, &node, 0.01);
+    fcu.subscribe(&MultiWiiNode::onAttitude, &node, 0.01);
+    fcu.subscribe(&MultiWiiNode::onRc, &node, 0.1);
+    fcu.subscribe(&MultiWiiNode::onServo, &node, 1);
+    fcu.subscribe(&MultiWiiNode::onMotor, &node, 0.1);
+    fcu.subscribe(&MultiWiiNode::onMisc, &node, 1);
+    fcu.subscribe(&MultiWiiNode::onAnalog, &node, 10);
+    fcu.subscribe(&MultiWiiNode::onStatus, &node, 0.1);
 
     while (ros::ok()) {
-        //fcu.handle();
-        fcu.handle_batch();
+//        fcu.handle();
+//        fcu.handle_batch();
+//        fcu.sendRequests();
+        fcu.handleRequests();
+
+        ros::spinOnce();
     }
+
+    ros::shutdown();
 }
