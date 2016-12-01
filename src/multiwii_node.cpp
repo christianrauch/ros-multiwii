@@ -15,6 +15,8 @@
 #include <mavros_msgs/RCIn.h>
 #include <mavros_msgs/RCOut.h>
 #include <mavros_msgs/OverrideRCIn.h>
+#include <mavros_msgs/ActuatorControl.h>
+#include <mavros_msgs/CommandBool.h>
 
 #include <msp/FlightController.hpp>
 #include <msp/msp_msg.hpp>
@@ -44,6 +46,9 @@ private:
     ros::Publisher arm_status_pub;
 
     ros::Subscriber rc_in_sub;
+    ros::Subscriber motor_control_sub;
+
+    ros::ServiceServer arming_srv;
 
 public:
 
@@ -51,9 +56,9 @@ public:
 
     void setup() {
         // publisher
-        imu_pub = nh.advertise<sensor_msgs::Imu>("imu", 1);
-        magn_pub = nh.advertise<sensor_msgs::MagneticField>("magnetometer", 1);
-        pose_stamped_pub = nh.advertise<geometry_msgs::PoseStamped>("pose", 1);
+        imu_pub = nh.advertise<sensor_msgs::Imu>("imu/data", 1);
+        magn_pub = nh.advertise<sensor_msgs::MagneticField>("imu/mag", 1);
+        pose_stamped_pub = nh.advertise<geometry_msgs::PoseStamped>("local_position/pose", 1);
         rpy_pub = nh.advertise<geometry_msgs::Vector3>("rpy", 1);
         rc_in_pub = nh.advertise<mavros_msgs::RCIn>("rc/in", 1);
         rc_out_pub = nh.advertise<mavros_msgs::RCOut>("rc/out", 1);
@@ -66,6 +71,10 @@ public:
 
         // subscriber
         rc_in_sub = nh.subscribe("rc/override", 1, &MultiWiiNode::rc_override, this);
+        motor_control_sub = nh.subscribe("actuator_control", 1, &MultiWiiNode::motor_control, this);
+
+        // services
+        arming_srv = nh.advertiseService("cmd/arming", &MultiWiiNode::arming, this);
     }
 
 
@@ -215,7 +224,30 @@ public:
     void rc_override(const mavros_msgs::OverrideRCIn &rc) {
         std::cout<<"overriding RC:"<<std::endl;
         std::cout<<rc.channels[0]<<" "<<rc.channels[1]<<" "<<rc.channels[2]<<" "<<rc.channels[3]<<std::endl;
-        fcu.setRc(rc.channels[0], rc.channels[1], rc.channels[2], rc.channels[3]);
+        fcu.setRc(rc.channels[0], rc.channels[1], rc.channels[2], rc.channels[3],
+                  rc.channels[4], rc.channels[5], rc.channels[6], rc.channels[7]);
+    }
+
+    void motor_control(const mavros_msgs::ActuatorControl &motors) {
+        // ActuatorControl::controls contains normed values in range [-1,+1],
+        // negative values are for reversing the motor spinning direction.
+        // We will ignore reversed motor direction and the final motor value
+        // becomes: 1000 + abs(m)*1000
+
+        std::array<uint16_t,msp::N_MOTOR> motor_values;
+        for(uint i(0); i<motor_values.size(); i++) {
+            motor_values[i] = 1000+abs(motors.controls[i]*1000);
+        }
+
+        fcu.setMotors(motor_values);
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+    /// services
+
+    bool arming(mavros_msgs::CommandBool::Request &req, mavros_msgs::CommandBool::Response &res) {
+        res.success = (req.value) ? fcu.arm_block() : fcu.disarm_block();
+        return res.success;
     }
 };
 
@@ -228,9 +260,8 @@ int main(int argc, char **argv) {
     fcu.setGyroUnit(1/4096.0);
     fcu.setMagnGain(1090/100.0);
     fcu.setStandardGravity(9.80665);
-    fcu.populate_database();
 
-    fcu.waitForConnection();
+    fcu.initialise();
 
     ROS_INFO("MSP ready");
     std::cout<<"MSP ready"<<std::endl;
