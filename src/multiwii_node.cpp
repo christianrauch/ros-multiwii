@@ -298,6 +298,8 @@ int main(int argc, char **argv) {
     fcu.subscribe(&MultiWiiNode::onAnalog, &node, 10);
     fcu.subscribe(&MultiWiiNode::onStatus, &node, 0.1);
 
+    ros::Rate r(400);
+
     while (ros::ok()) {
 //        fcu.handle();
 //        fcu.handle_batch();
@@ -305,6 +307,7 @@ int main(int argc, char **argv) {
         fcu.handleRequests();
 
         ros::spinOnce();
+        r.sleep();
     }
 
     ros::shutdown();
