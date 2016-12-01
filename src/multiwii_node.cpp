@@ -4,6 +4,7 @@
 #include <std_msgs/UInt32.h>
 #include <std_msgs/UInt8MultiArray.h>
 #include <std_msgs/Bool.h>
+#include <std_msgs/Float64.h>
 
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/Vector3.h>
@@ -30,6 +31,10 @@ double deg2rad(const double deg) {
     return deg/180.0 * M_PI;
 }
 
+double rad2deg(const double rad) {
+    return rad/M_PI * 180.0;
+}
+
 class MultiWiiNode {
 private:
     ros::NodeHandle nh;
@@ -44,6 +49,7 @@ private:
     ros::Publisher battery_pub;
     ros::Publisher boxes_pub;
     ros::Publisher arm_status_pub;
+    ros::Publisher heading_pub;
 
     ros::Subscriber rc_in_sub;
     ros::Subscriber motor_control_sub;
@@ -68,6 +74,7 @@ public:
         battery_pub = nh.advertise<sensor_msgs::BatteryState>("battery",1);
         boxes_pub = nh.advertise<std_msgs::UInt8MultiArray>("boxes",1);
         arm_status_pub = nh.advertise<std_msgs::Bool>("armed",1);
+        heading_pub = nh.advertise<std_msgs::Float64>("global_position/compass_hdg",1);
 
         // subscriber
         rc_in_sub = nh.subscribe("rc/override", 1, &MultiWiiNode::rc_override, this);
@@ -82,7 +89,6 @@ public:
     /// callbacks for published messages
 
     void onImu(const msp::Imu &imu) {
-        //std::cout<<imu;
         sensor_msgs::Imu imu_msg;
 
         imu_msg.header.stamp = ros::Time::now();
@@ -92,15 +98,21 @@ public:
         imu_msg.linear_acceleration.y = imu.acc[1];
         imu_msg.linear_acceleration.z = imu.acc[2];
 
-        imu_msg.angular_velocity.x = imu.gyro[0]*M_PI/180.0;
-        imu_msg.angular_velocity.y = imu.gyro[1]*M_PI/180.0;
-        imu_msg.angular_velocity.z = imu.gyro[2]*M_PI/180.0;
+        imu_msg.angular_velocity.x = deg2rad(imu.gyro[0]);
+        imu_msg.angular_velocity.y = deg2rad(imu.gyro[1]);
+        imu_msg.angular_velocity.z = deg2rad(imu.gyro[2]);
 
+        // magnetic field in uT
         sensor_msgs::MagneticField mag_msg;
         mag_msg.header.stamp = ros::Time::now();
         mag_msg.magnetic_field.x = imu.magn[0];
         mag_msg.magnetic_field.y = imu.magn[1];
         mag_msg.magnetic_field.z = imu.magn[2];
+
+        // heading
+        std_msgs::Float64 heading;
+        heading.data = rad2deg(atan2(imu.magn[0], imu.magn[1]));
+        heading_pub.publish(heading);
 
         const Eigen::Vector3f magn(imu.magn[0], imu.magn[1], imu.magn[2]);
         const Eigen::Vector3f lin_acc(imu.acc[0], imu.acc[1], imu.acc[2]);
@@ -258,7 +270,10 @@ int main(int argc, char **argv) {
     fcu::FlightController fcu("/dev/ttyUSB0");
     fcu.setAcc1G(512);
     fcu.setGyroUnit(1/4096.0);
-    fcu.setMagnGain(1090/100.0);
+    // 1 Gs = 0.1 mT = 100 uT
+    // HMC5883L default gain: 1090 LSb/Gauss = 0.92 mG/LSb
+    // 1 unit = 0.92 mGs = 0.92/1000 Gs = 100*0.92/1000 uT = 0.92/10 uT
+    fcu.setMagnGain(0.92/10.0);
     fcu.setStandardGravity(9.80665);
 
     fcu.initialise();
