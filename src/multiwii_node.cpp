@@ -40,7 +40,8 @@ private:
     ros::NodeHandle nh;
     fcu::FlightController &fcu;
 
-    ros::Publisher imu_pub, magn_pub;
+    ros::Publisher imu_pub;
+    ros::Publisher magn_pub;
     ros::Publisher pose_stamped_pub;
     ros::Publisher rpy_pub;
     ros::Publisher rc_in_pub, rc_out_pub;
@@ -94,10 +95,12 @@ public:
         imu_msg.header.stamp = ros::Time::now();
         imu_msg.header.frame_id = "imu";
 
+        // linear acceleration in m/s²
         imu_msg.linear_acceleration.x = imu.acc[0];
         imu_msg.linear_acceleration.y = imu.acc[1];
         imu_msg.linear_acceleration.z = imu.acc[2];
 
+        // angular velocity in rad/s
         imu_msg.angular_velocity.x = deg2rad(imu.gyro[0]);
         imu_msg.angular_velocity.y = deg2rad(imu.gyro[1]);
         imu_msg.angular_velocity.z = deg2rad(imu.gyro[2]);
@@ -119,9 +122,9 @@ public:
 
         // http://www.camelsoftware.com/2016/02/20/imu-maths/
         Eigen::Matrix3f rot;
-        rot.col(0) = lin_acc.normalized();
-        rot.col(1) = rot.col(0).cross(magn.normalized());
-        rot.col(2) = rot.col(1).cross(rot.col(0));
+        rot.row(0) = lin_acc.normalized();
+        rot.row(1) = lin_acc.cross(magn).normalized();
+        rot.row(2) = lin_acc.cross(magn).cross(lin_acc).normalized();
 
         const Eigen::Quaternionf orientation(rot);
 
@@ -269,7 +272,7 @@ int main(int argc, char **argv) {
     // connect to flight controller
     fcu::FlightController fcu("/dev/ttyUSB0");
     fcu.setAcc1G(512);
-    fcu.setGyroUnit(1/4096.0);
+    fcu.setGyroUnit(1/4.096);
     // 1 Gs = 0.1 mT = 100 uT
     // HMC5883L default gain: 1090 LSb/Gauss = 0.92 mG/LSb
     // 1 unit = 0.92 mGs = 0.92/1000 Gs = 100*0.92/1000 uT = 0.92/10 uT
