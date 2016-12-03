@@ -19,6 +19,8 @@
 #include <mavros_msgs/ActuatorControl.h>
 #include <mavros_msgs/CommandBool.h>
 
+#include <visualization_msgs/MarkerArray.h>
+
 #include <msp/FlightController.hpp>
 #include <msp/msp_msg.hpp>
 #include <msp/msg_print.hpp>
@@ -33,6 +35,35 @@ double deg2rad(const double deg) {
 
 double rad2deg(const double rad) {
     return rad/M_PI * 180.0;
+}
+
+visualization_msgs::Marker ArrowMarker(const Eigen::Vector3d vec, const std::array<uint,3> &colour, const std::string name) {
+    visualization_msgs::Marker arrow;
+    arrow.header.stamp = ros::Time::now();
+    arrow.header.frame_id = "map";
+    arrow.ns = name;
+
+    arrow.type = visualization_msgs::Marker::ARROW;
+    arrow.action = visualization_msgs::Marker::ADD;
+
+    arrow.points.resize(2);
+    arrow.points[0].x = 0;
+    arrow.points[0].y = 0;
+    arrow.points[0].z = 0;
+    arrow.points[1].x = vec.x();
+    arrow.points[1].y = vec.y();
+    arrow.points[1].z = vec.z();
+
+    arrow.color.r = colour[0];
+    arrow.color.g = colour[1];
+    arrow.color.b = colour[2];
+    arrow.color.a = 1.0;
+
+    arrow.scale.x = 0.1;
+    arrow.scale.y = 0.1;
+    arrow.scale.z = 0.1;
+
+    return arrow;
 }
 
 class MultiWiiNode {
@@ -51,6 +82,7 @@ private:
     ros::Publisher boxes_pub;
     ros::Publisher arm_status_pub;
     ros::Publisher heading_pub;
+    ros::Publisher vis_pub;
 
     ros::Subscriber rc_in_sub;
     ros::Subscriber motor_control_sub;
@@ -77,6 +109,8 @@ public:
         arm_status_pub = nh.advertise<std_msgs::Bool>("armed",1);
         heading_pub = nh.advertise<std_msgs::Float64>("global_position/compass_hdg",1);
 
+        vis_pub = nh.advertise<visualization_msgs::MarkerArray>("visualization_marker_array", 0);
+
         // subscriber
         rc_in_sub = nh.subscribe("rc/override", 1, &MultiWiiNode::rc_override, this);
         motor_control_sub = nh.subscribe("actuator_control", 1, &MultiWiiNode::motor_control, this);
@@ -90,6 +124,8 @@ public:
     /// callbacks for published messages
 
     void onImu(const msp::Imu &imu) {
+        visualization_msgs::MarkerArray markers;
+
         sensor_msgs::Imu imu_msg;
 
         imu_msg.header.stamp = ros::Time::now();
@@ -99,6 +135,10 @@ public:
         imu_msg.linear_acceleration.x = imu.acc[0];
         imu_msg.linear_acceleration.y = imu.acc[1];
         imu_msg.linear_acceleration.z = imu.acc[2];
+
+        markers.markers.push_back(ArrowMarker(
+                Eigen::Vector3d(imu.acc[0], imu.acc[1], imu.acc[2]).normalized(),
+        {255, 0, 0}, "acc"));
 
         // angular velocity in rad/s
         imu_msg.angular_velocity.x = deg2rad(imu.gyro[0]);
@@ -112,21 +152,31 @@ public:
         mag_msg.magnetic_field.y = imu.magn[1];
         mag_msg.magnetic_field.z = imu.magn[2];
 
+        markers.markers.push_back(ArrowMarker(
+                Eigen::Vector3d(imu.magn[0], imu.magn[1], imu.magn[2]).normalized(),
+        {255, 255, 0}, "magn"));
+
         // heading
         std_msgs::Float64 heading;
         heading.data = rad2deg(atan2(imu.magn[0], imu.magn[1]));
         heading_pub.publish(heading);
 
-        const Eigen::Vector3f magn(imu.magn[0], imu.magn[1], imu.magn[2]);
-        const Eigen::Vector3f lin_acc(imu.acc[0], imu.acc[1], imu.acc[2]);
+        const Eigen::Vector3d magn(imu.magn[0], imu.magn[1], imu.magn[2]);
+        const Eigen::Vector3d lin_acc(imu.acc[0], imu.acc[1], imu.acc[2]);
 
         // http://www.camelsoftware.com/2016/02/20/imu-maths/
-        Eigen::Matrix3f rot;
+        Eigen::Matrix3d rot;
         rot.row(0) = lin_acc.normalized();
         rot.row(1) = lin_acc.cross(magn).normalized();
         rot.row(2) = lin_acc.cross(magn).cross(lin_acc).normalized();
 
-        const Eigen::Quaternionf orientation(rot);
+        markers.markers.push_back(ArrowMarker(
+                lin_acc.cross(magn).normalized(), {0, 255, 0}, "acc_cross_magn"));
+        markers.markers.push_back(ArrowMarker(
+                lin_acc.cross(magn).cross(lin_acc).normalized(),
+                {0, 0, 255}, "acc_cross_magn_cross_acc"));
+
+        const Eigen::Quaterniond orientation(rot);
 
         geometry_msgs::Quaternion quat;
         quat.x = orientation.x();
@@ -138,6 +188,8 @@ public:
 
         imu_pub.publish(imu_msg);
         magn_pub.publish(mag_msg);
+
+        vis_pub.publish(markers);
     }
 
     void onAttitude(const msp::Attitude &attitude) {
