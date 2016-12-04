@@ -40,7 +40,7 @@ double rad2deg(const double rad) {
 visualization_msgs::Marker ArrowMarker(const Eigen::Vector3d vec, const std::array<uint,3> &colour, const std::string name) {
     visualization_msgs::Marker arrow;
     arrow.header.stamp = ros::Time::now();
-    arrow.header.frame_id = "map";
+    arrow.header.frame_id = "multiwii";
     arrow.ns = name;
 
     arrow.type = visualization_msgs::Marker::ARROW;
@@ -124,70 +124,79 @@ public:
     /// callbacks for published messages
 
     void onImu(const msp::Imu &imu) {
-        visualization_msgs::MarkerArray markers;
+        ///////////////////////////////////
+        /// IMU data
 
         sensor_msgs::Imu imu_msg;
-
         imu_msg.header.stamp = ros::Time::now();
-        imu_msg.header.frame_id = "imu";
+        imu_msg.header.frame_id = "multiwii";
 
         // linear acceleration in m/s²
         imu_msg.linear_acceleration.x = imu.acc[0];
         imu_msg.linear_acceleration.y = imu.acc[1];
         imu_msg.linear_acceleration.z = imu.acc[2];
 
-        markers.markers.push_back(ArrowMarker(
-                Eigen::Vector3d(imu.acc[0], imu.acc[1], imu.acc[2]).normalized(),
-        {255, 0, 0}, "acc"));
-
         // angular velocity in rad/s
         imu_msg.angular_velocity.x = deg2rad(imu.gyro[0]);
         imu_msg.angular_velocity.y = deg2rad(imu.gyro[1]);
         imu_msg.angular_velocity.z = deg2rad(imu.gyro[2]);
 
-        // magnetic field in uT
-        sensor_msgs::MagneticField mag_msg;
-        mag_msg.header.stamp = ros::Time::now();
-        mag_msg.magnetic_field.x = imu.magn[0];
-        mag_msg.magnetic_field.y = imu.magn[1];
-        mag_msg.magnetic_field.z = imu.magn[2];
-
-        markers.markers.push_back(ArrowMarker(
-                Eigen::Vector3d(imu.magn[0], imu.magn[1], imu.magn[2]).normalized(),
-        {255, 255, 0}, "magn"));
-
-        // heading
-        std_msgs::Float64 heading;
-        heading.data = rad2deg(atan2(imu.magn[0], imu.magn[1]));
-        heading_pub.publish(heading);
-
+        // rotation from direction of acceleration and magnetic field
         const Eigen::Vector3d magn(imu.magn[0], imu.magn[1], imu.magn[2]);
         const Eigen::Vector3d lin_acc(imu.acc[0], imu.acc[1], imu.acc[2]);
 
         // http://www.camelsoftware.com/2016/02/20/imu-maths/
         Eigen::Matrix3d rot;
-        rot.row(0) = lin_acc.normalized();
-        rot.row(1) = lin_acc.cross(magn).normalized();
-        rot.row(2) = lin_acc.cross(magn).cross(lin_acc).normalized();
-
-        markers.markers.push_back(ArrowMarker(
-                lin_acc.cross(magn).normalized(), {0, 255, 0}, "acc_cross_magn"));
-        markers.markers.push_back(ArrowMarker(
-                lin_acc.cross(magn).cross(lin_acc).normalized(),
-                {0, 0, 255}, "acc_cross_magn_cross_acc"));
+        rot.col(0) = lin_acc.cross(magn).cross(lin_acc).normalized();
+        rot.col(1) = lin_acc.cross(magn).normalized();
+        rot.col(2) = lin_acc.normalized();
 
         const Eigen::Quaterniond orientation(rot);
-
-        geometry_msgs::Quaternion quat;
-        quat.x = orientation.x();
-        quat.y = orientation.y();
-        quat.z = orientation.z();
-        quat.w = orientation.w();
-
-        imu_msg.orientation = quat;
+        imu_msg.orientation.x = orientation.x();
+        imu_msg.orientation.y = orientation.y();
+        imu_msg.orientation.z = orientation.z();
+        imu_msg.orientation.w = orientation.w();
 
         imu_pub.publish(imu_msg);
+
+        ///////////////////////////////////
+        /// magnetic field vector
+
+        sensor_msgs::MagneticField mag_msg;
+        mag_msg.header.stamp = ros::Time::now();
+
+        // magnetic field in uT
+        mag_msg.magnetic_field.x = imu.magn[0];
+        mag_msg.magnetic_field.y = imu.magn[1];
+        mag_msg.magnetic_field.z = imu.magn[2];
         magn_pub.publish(mag_msg);
+
+        ///////////////////////////////////
+        /// heading from magnetic field
+
+        std_msgs::Float64 heading;
+        heading.data = rad2deg(atan2(imu.magn[0], imu.magn[1]));
+        heading_pub.publish(heading);
+
+        ///////////////////////////////////
+        /// visualization of IMU coordinate system axis
+
+        // publish axis of imu coordinate system
+        visualization_msgs::MarkerArray markers;
+
+        // z (blue), direction of linear acceleration
+        markers.markers.push_back(ArrowMarker(lin_acc.normalized(), {0, 0, 255}, "acc"));
+
+        // direction of magnetic field, yellow
+        markers.markers.push_back(ArrowMarker(magn.normalized(), {255, 255, 0}, "magn"));
+
+        // y (green)
+        markers.markers.push_back(ArrowMarker(
+                lin_acc.cross(magn).normalized(), {0, 255, 0}, "acc_cross_magn"));
+        // x (red)
+        markers.markers.push_back(ArrowMarker(
+                lin_acc.cross(magn).cross(lin_acc).normalized(),
+                {255, 0, 0}, "acc_cross_magn_cross_acc"));
 
         vis_pub.publish(markers);
     }
@@ -203,7 +212,7 @@ public:
 
         geometry_msgs::PoseStamped pose_stamped;
         pose_stamped.header.stamp = ros::Time::now();
-        pose_stamped.header.frame_id = "attitude";
+        pose_stamped.header.frame_id = "multiwii";
         pose_stamped.pose.orientation.x = quat.x();
         pose_stamped.pose.orientation.y = quat.y();
         pose_stamped.pose.orientation.z = quat.z();
