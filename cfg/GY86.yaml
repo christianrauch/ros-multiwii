@@ -1,0 +1,12 @@
+# configuration for GY-86 breakout board
+
+# MPU-6050: accelerometer, gyroscope
+standard_gravity: 9.80665 # linear acceleration (m/s^2) at 1G
+acc_1g: 512 # unit-less value that is reported at 1G
+gyro_unit: 0.244140625 # := 1/4.096
+
+# HMC5883L: compass
+# 1 Gs = 0.1 mT = 100 uT
+# HMC5883L default gain: 1090 LSb/Gauss = 0.92 mG/LSb
+# 1 unit = 0.92 mGs = 0.92/1000 Gs = 100*0.92/1000 uT = 0.92/10 uT
+magn_gain: 0.092

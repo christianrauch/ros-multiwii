@@ -69,7 +69,7 @@ visualization_msgs::Marker ArrowMarker(const Eigen::Vector3d vec, const std::arr
 class MultiWiiNode {
 private:
     ros::NodeHandle nh;
-    fcu::FlightController &fcu;
+    fcu::FlightController *fcu;
 
     ros::Publisher imu_pub;
     ros::Publisher magn_pub;
@@ -90,10 +90,53 @@ private:
     ros::ServiceServer arming_srv;
 
 public:
+    MultiWiiNode() {
+        std::string device;
+        if(nh.getParam("device", device)) {
+            fcu = new fcu::FlightController(device);
+            ROS_INFO("Connected to FCU at %s", device.c_str());
+        }
+        else {
+            fcu = NULL;
+            ROS_ERROR("Parameter 'device' not set.");
+        }
 
-    MultiWiiNode(fcu::FlightController &fcu) : fcu(fcu) { }
+        float std_grav;
+        if(nh.getParam("standard_gravity", std_grav))
+            fcu->setStandardGravity(std_grav);
+        else
+            ROS_ERROR("Parameter 'standard_gravity' not set.");
+
+        float acc_1g;
+        if(nh.getParam("acc_1g", acc_1g))
+            fcu->setAcc1G(acc_1g);
+        else
+            ROS_ERROR("Parameter 'acc_1g' not set.");
+
+        float gyro_unit;
+        if(nh.getParam("gyro_unit", gyro_unit))
+            fcu->setGyroUnit(gyro_unit);
+        else
+            ROS_ERROR("Parameter 'gyro_unit' not set.");
+
+        float magn_gain;
+        if(nh.getParam("magn_gain", magn_gain))
+            fcu->setMagnGain(magn_gain);
+        else
+            ROS_ERROR("Parameter 'magn_gain' not set.");
+    }
+
+    ~MultiWiiNode() {
+        delete fcu;
+    }
+
+    fcu::FlightController& fc() const {
+        return *fcu;
+    }
 
     void setup() {
+        fcu->initialise();
+
         // publisher
         imu_pub = nh.advertise<sensor_msgs::Imu>("imu/data", 1);
         magn_pub = nh.advertise<sensor_msgs::MagneticField>("imu/mag", 1);
@@ -269,7 +312,6 @@ public:
     }
 
     void onAnalog(const msp::Analog &analog) {
-        //std::cout<<analog;
         sensor_msgs::BatteryState battery;
         battery.header.stamp = ros::Time::now();
         battery.voltage = analog.vbat;
@@ -279,8 +321,6 @@ public:
     }
 
     void onStatus(const msp::Status &status) {
-        //std::cout<<status;
-
         std_msgs::Bool armed;
         armed.data = status.active_box_id.count(0);
 
@@ -300,8 +340,8 @@ public:
     void rc_override(const mavros_msgs::OverrideRCIn &rc) {
         std::cout<<"overriding RC:"<<std::endl;
         std::cout<<rc.channels[0]<<" "<<rc.channels[1]<<" "<<rc.channels[2]<<" "<<rc.channels[3]<<std::endl;
-        fcu.setRc(rc.channels[0], rc.channels[1], rc.channels[2], rc.channels[3],
-                  rc.channels[4], rc.channels[5], rc.channels[6], rc.channels[7]);
+        fcu->setRc(rc.channels[0], rc.channels[1], rc.channels[2], rc.channels[3],
+                   rc.channels[4], rc.channels[5], rc.channels[6], rc.channels[7]);
     }
 
     void motor_control(const mavros_msgs::ActuatorControl &motors) {
@@ -315,14 +355,14 @@ public:
             motor_values[i] = 1000+abs(motors.controls[i]*1000);
         }
 
-        fcu.setMotors(motor_values);
+        fcu->setMotors(motor_values);
     }
 
     ////////////////////////////////////////////////////////////////////////////
     /// services
 
     bool arming(mavros_msgs::CommandBool::Request &req, mavros_msgs::CommandBool::Response &res) {
-        res.success = (req.value) ? fcu.arm_block() : fcu.disarm_block();
+        res.success = (req.value) ? fcu->arm_block() : fcu->disarm_block();
         return res.success;
     }
 };
@@ -330,44 +370,28 @@ public:
 int main(int argc, char **argv) {
     ros::init(argc, argv, "MultiWii");
 
-    // connect to flight controller
-    fcu::FlightController fcu("/dev/ttyUSB0");
-    fcu.setAcc1G(512);
-    fcu.setGyroUnit(1/4.096);
-    // 1 Gs = 0.1 mT = 100 uT
-    // HMC5883L default gain: 1090 LSb/Gauss = 0.92 mG/LSb
-    // 1 unit = 0.92 mGs = 0.92/1000 Gs = 100*0.92/1000 uT = 0.92/10 uT
-    fcu.setMagnGain(0.92/10.0);
-    fcu.setStandardGravity(9.80665);
+    //MultiWiiNode node(fcu);
+    MultiWiiNode node;
 
-    fcu.initialise();
+    // setup FCU, register publisher
+    node.setup();
 
     ROS_INFO("MSP ready");
     std::cout<<"MSP ready"<<std::endl;
 
-    MultiWiiNode node(fcu);
-
-    // register publisher
-    node.setup();
-
-    fcu.subscribe(&MultiWiiNode::onImu, &node, 0.01);
-    fcu.subscribe(&MultiWiiNode::onAttitude, &node, 0.01);
-    fcu.subscribe(&MultiWiiNode::onRc, &node, 0.1);
-    fcu.subscribe(&MultiWiiNode::onServo, &node, 1);
-    fcu.subscribe(&MultiWiiNode::onMotor, &node, 0.1);
-    fcu.subscribe(&MultiWiiNode::onMisc, &node, 1);
-    fcu.subscribe(&MultiWiiNode::onAnalog, &node, 10);
-    fcu.subscribe(&MultiWiiNode::onStatus, &node, 0.1);
+    node.fc().subscribe(&MultiWiiNode::onImu, &node, 0.01);
+    node.fc().subscribe(&MultiWiiNode::onAttitude, &node, 0.01);
+    node.fc().subscribe(&MultiWiiNode::onRc, &node, 0.1);
+    node.fc().subscribe(&MultiWiiNode::onServo, &node, 1);
+    node.fc().subscribe(&MultiWiiNode::onMotor, &node, 0.1);
+    node.fc().subscribe(&MultiWiiNode::onMisc, &node, 1);
+    node.fc().subscribe(&MultiWiiNode::onAnalog, &node, 10);
+    node.fc().subscribe(&MultiWiiNode::onStatus, &node, 0.1);
 
     ros::Rate r(400);
 
     while (ros::ok()) {
-//        fcu.handle();
-//        fcu.handle_batch();
-//        fcu.sendRequests();
-        fcu.handleRequests();
-
-        ros::spinOnce();
+        node.fc().handleRequests();
         r.sleep();
     }
 
