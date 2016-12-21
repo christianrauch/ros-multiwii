@@ -83,6 +83,7 @@ private:
     ros::Publisher arm_status_pub;
     ros::Publisher heading_pub;
     ros::Publisher vis_pub;
+    ros::Publisher altitude_pub;
 
     ros::Subscriber rc_in_sub;
     ros::Subscriber motor_control_sub;
@@ -151,6 +152,7 @@ public:
         boxes_pub = nh.advertise<std_msgs::UInt8MultiArray>("boxes",1);
         arm_status_pub = nh.advertise<std_msgs::Bool>("armed",1);
         heading_pub = nh.advertise<std_msgs::Float64>("global_position/compass_hdg",1);
+        altitude_pub = nh.advertise<std_msgs::Float64>("global_position/rel_alt",1);
 
         vis_pub = nh.advertise<visualization_msgs::MarkerArray>("visualization_marker_array", 0);
 
@@ -270,6 +272,12 @@ public:
         rpy_pub.publish(rpy);
     }
 
+    void onAltitude(const msp::Altitude &altitude) {
+        std_msgs::Float64 alt; // altitude in meter
+        alt.data = altitude.altitude;
+        altitude_pub.publish(alt);
+    }
+
     void onRc(const msp::Rc &rc) {
         mavros_msgs::RCIn rc_msg;
         rc_msg.header.stamp = ros::Time::now();
@@ -381,6 +389,7 @@ int main(int argc, char **argv) {
 
     node.fc().subscribe(&MultiWiiNode::onImu, &node, 0.01);
     node.fc().subscribe(&MultiWiiNode::onAttitude, &node, 0.01);
+    node.fc().subscribe(&MultiWiiNode::onAltitude, &node, 0.1);
     node.fc().subscribe(&MultiWiiNode::onRc, &node, 0.1);
     node.fc().subscribe(&MultiWiiNode::onServo, &node, 1);
     node.fc().subscribe(&MultiWiiNode::onMotor, &node, 0.1);
