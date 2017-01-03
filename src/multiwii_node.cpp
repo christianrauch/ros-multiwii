@@ -401,6 +401,7 @@ int main(int argc, char **argv) {
 
     while (ros::ok()) {
         node.fc().handleRequests();
+        ros::spinOnce();
         r.sleep();
     }
 
