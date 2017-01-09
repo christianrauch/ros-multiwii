@@ -93,8 +93,18 @@ private:
 public:
     MultiWiiNode() {
         std::string device;
+        int baudrate = 115200;
         if(nh.getParam("device", device)) {
-            fcu = new fcu::FlightController(device);
+            if(!nh.getParam("baudrate", baudrate)) {
+                ROS_ERROR("Parameter 'baudrate' not set. Using default baudrate of %i", baudrate);
+            }
+            else {
+                if(baudrate>=0) {
+                    ROS_ERROR("'baudrate' must be positive!");
+                    baudrate = 115200;
+                }
+            }
+            fcu = new fcu::FlightController(device, uint(baudrate));
             ROS_INFO("Connected to FCU at %s", device.c_str());
         }
         else {
