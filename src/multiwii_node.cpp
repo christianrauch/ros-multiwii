@@ -99,7 +99,7 @@ public:
                 ROS_ERROR("Parameter 'baudrate' not set. Using default baudrate of %i", baudrate);
             }
             else {
-                if(baudrate>=0) {
+                if(baudrate<=0) {
                     ROS_ERROR("'baudrate' must be positive!");
                     baudrate = 115200;
                 }
