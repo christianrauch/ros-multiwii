@@ -81,6 +81,7 @@ private:
     ros::Publisher battery_pub;
     ros::Publisher boxes_pub;
     ros::Publisher arm_status_pub;
+    ros::Publisher failsafe_status_pub;
     ros::Publisher heading_pub;
     ros::Publisher vis_pub;
     ros::Publisher altitude_pub;
@@ -160,7 +161,8 @@ public:
         lifetime_pub = nh.advertise<std_msgs::UInt32>("lifetime",1);
         battery_pub = nh.advertise<sensor_msgs::BatteryState>("battery",1);
         boxes_pub = nh.advertise<std_msgs::UInt8MultiArray>("boxes",1);
-        arm_status_pub = nh.advertise<std_msgs::Bool>("armed",1);
+        arm_status_pub = nh.advertise<std_msgs::Bool>("status/armed",1);
+        failsafe_status_pub = nh.advertise<std_msgs::Bool>("status/failsafe",1);
         heading_pub = nh.advertise<std_msgs::Float64>("global_position/compass_hdg",1);
         altitude_pub = nh.advertise<std_msgs::Float64>("global_position/rel_alt",1);
 
@@ -340,7 +342,10 @@ public:
 
     void onStatus(const msp::Status &status) {
         std_msgs::Bool armed;
-        armed.data = status.active_box_id.count(0);
+        armed.data = status.active_box_id.count(fcu->getBoxNames().at("ARM"));
+
+        std_msgs::Bool failsave_active;
+        failsave_active.data = status.active_box_id.count(fcu->getBoxNames().at("FAILSAFE"));
 
         std_msgs::UInt8MultiArray box_ids;
         for(const uint b : status.active_box_id) {
@@ -349,6 +354,7 @@ public:
 
         boxes_pub.publish(box_ids);
         arm_status_pub.publish(armed);
+        failsafe_status_pub.publish(failsave_active);
     }
 
 
