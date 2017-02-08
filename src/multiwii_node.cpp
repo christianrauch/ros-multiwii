@@ -27,8 +27,6 @@
 
 #include <Eigen/Geometry>
 
-#include <msp/msg_print.hpp>
-
 double deg2rad(const double deg) {
     return deg/180.0 * M_PI;
 }
@@ -75,7 +73,7 @@ private:
     ros::Publisher magn_pub;
     ros::Publisher pose_stamped_pub;
     ros::Publisher rpy_pub;
-    ros::Publisher rc_in_pub, rc_out_pub;
+    ros::Publisher rc_in_pub, servo_pub;
     ros::Publisher motors_pub;
     ros::Publisher arm_pub, lifetime_pub;
     ros::Publisher battery_pub;
@@ -155,7 +153,7 @@ public:
         pose_stamped_pub = nh.advertise<geometry_msgs::PoseStamped>("local_position/pose", 1);
         rpy_pub = nh.advertise<geometry_msgs::Vector3>("rpy", 1);
         rc_in_pub = nh.advertise<mavros_msgs::RCIn>("rc/in", 1);
-        rc_out_pub = nh.advertise<mavros_msgs::RCOut>("rc/out", 1);
+        servo_pub = nh.advertise<mavros_msgs::RCOut>("rc/servo", 1);
         motors_pub = nh.advertise<mavros_msgs::RCOut>("motors", 1);
         arm_pub = nh.advertise<std_msgs::UInt16>("arm_counter",1);
         lifetime_pub = nh.advertise<std_msgs::UInt32>("lifetime",1);
@@ -310,7 +308,7 @@ public:
         for(const uint16_t s : servo.servo) {
             rc.channels.push_back(s);
         }
-        rc_out_pub.publish(rc);
+        servo_pub.publish(rc);
     }
 
     void onMotor(const msp::Motor &motor) {
@@ -394,7 +392,6 @@ public:
 int main(int argc, char **argv) {
     ros::init(argc, argv, "MultiWii");
 
-    //MultiWiiNode node(fcu);
     MultiWiiNode node;
 
     // setup FCU, register publisher
