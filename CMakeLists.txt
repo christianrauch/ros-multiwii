@@ -8,6 +8,7 @@ add_definitions(-std=c++11)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
   roscpp
+  dynamic_reconfigure
   std_msgs
   geometry_msgs
   sensor_msgs
@@ -101,6 +102,9 @@ include_directories(${Eigen_INCLUDE_DIRS})
 #   cfg/DynReconf1.cfg
 #   cfg/DynReconf2.cfg
 # )
+generate_dynamic_reconfigure_options(
+    cfg/UpdateRates.cfg
+)
 
 ###################################
 ## catkin specific configuration ##
@@ -142,6 +146,7 @@ include_directories(
 
 ## Declare a C++ executable
 add_executable(multiwii_node src/multiwii_node.cpp)
+add_dependencies(multiwii_node ${PROJECT_NAME}_gencfg)
 
 ## Add cmake target dependencies of the executable
 ## same as for the library above

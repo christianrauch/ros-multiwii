@@ -1,5 +1,8 @@
 #include <ros/ros.h>
 
+#include <dynamic_reconfigure/server.h>
+#include <multiwii/UpdateRatesConfig.h>
+
 #include <std_msgs/UInt16.h>
 #include <std_msgs/UInt32.h>
 #include <std_msgs/UInt8MultiArray.h>
@@ -69,6 +72,10 @@ private:
     ros::NodeHandle nh;
     fcu::FlightController *fcu;
 
+    dynamic_reconfigure::Server<multiwii::UpdateRatesConfig> dyn_conf_srv;
+
+    ros::Rate loop_rate;
+
     ros::Publisher imu_pub;
     ros::Publisher magn_pub;
     ros::Publisher pose_stamped_pub;
@@ -90,7 +97,8 @@ private:
     ros::ServiceServer arming_srv;
 
 public:
-    MultiWiiNode() {
+    MultiWiiNode() : loop_rate(100) {
+        // configure
         std::string device;
         int baudrate = 115200;
         if(nh.getParam("device", device)) {
@@ -144,6 +152,10 @@ public:
         return *fcu;
     }
 
+    ros::Rate& rate() {
+        return loop_rate;
+    }
+
     void setup() {
         fcu->initialise();
 
@@ -172,6 +184,44 @@ public:
 
         // services
         arming_srv = nh.advertiseService("cmd/arming", &MultiWiiNode::arming, this);
+    }
+
+    /**
+     * @brief setDynamicConfigureCallback set the callback
+     * This will call the callback once for initialisation
+     */
+    void setDynamicConfigureCallback() {
+        // dynamic configure
+        dyn_conf_srv.setCallback(boost::bind(&MultiWiiNode::dynconf_callback, this, _1, _2));
+    }
+
+    void dynconf_callback(multiwii::UpdateRatesConfig &config, uint32_t /*level*/) {
+        // define map with matching update rate per message ID
+        const std::map<msp::ID, double> msp_rates = {
+            {msp::ID::MSP_STATUS, config.MSP_STATUS},
+            {msp::ID::MSP_RAW_IMU, config.MSP_RAW_IMU},
+            {msp::ID::MSP_ALTITUDE, config.MSP_ALTITUDE},
+            {msp::ID::MSP_ATTITUDE, config.MSP_ATTITUDE},
+            {msp::ID::MSP_RC, config.MSP_RC},
+            {msp::ID::MSP_SERVO, config.MSP_SERVO},
+            {msp::ID::MSP_MOTOR, config.MSP_MOTOR},
+            {msp::ID::MSP_SERVO, config.MSP_SERVO},
+            {msp::ID::MSP_MISC, config.MSP_MISC},
+            {msp::ID::MSP_ANALOG, config.MSP_ANALOG},
+        };
+
+
+        loop_rate = ros::Rate(config.ros_node);
+
+        // apply update
+        for(const auto& r : msp_rates) {
+            if(fcu->hasSubscription(r.first)) {
+                fcu->getSubscription(r.first)->setTimerFrequency(r.second);
+            }
+            else {
+                std::cerr<<"message ID "<<uint(r.first)<<" not subscribed"<<std::endl;
+            }
+        }
     }
 
 
@@ -400,22 +450,25 @@ int main(int argc, char **argv) {
     ROS_INFO("MSP ready");
     std::cout<<"MSP ready"<<std::endl;
 
-    node.fc().subscribe(&MultiWiiNode::onImu, &node, 0.01);
-    node.fc().subscribe(&MultiWiiNode::onAttitude, &node, 0.01);
-    node.fc().subscribe(&MultiWiiNode::onAltitude, &node, 0.1);
-    node.fc().subscribe(&MultiWiiNode::onRc, &node, 0.1);
-    node.fc().subscribe(&MultiWiiNode::onServo, &node, 1);
-    node.fc().subscribe(&MultiWiiNode::onMotor, &node, 0.1);
-    node.fc().subscribe(&MultiWiiNode::onMisc, &node, 1);
-    node.fc().subscribe(&MultiWiiNode::onAnalog, &node, 10);
-    node.fc().subscribe(&MultiWiiNode::onStatus, &node, 0.1);
+    node.fc().subscribe(&MultiWiiNode::onImu, &node);
+    node.fc().subscribe(&MultiWiiNode::onAttitude, &node);
+    node.fc().subscribe(&MultiWiiNode::onAltitude, &node);
+    node.fc().subscribe(&MultiWiiNode::onRc, &node);
+    node.fc().subscribe(&MultiWiiNode::onServo, &node);
+    node.fc().subscribe(&MultiWiiNode::onMotor, &node);
+    node.fc().subscribe(&MultiWiiNode::onMisc, &node);
+    node.fc().subscribe(&MultiWiiNode::onAnalog, &node);
+    node.fc().subscribe(&MultiWiiNode::onStatus, &node);
 
-    ros::Rate r(400);
+    // register callback for dynamic configuration
+    // - update rates for MSP subscriber
+    // - main ROS node loop rate
+    node.setDynamicConfigureCallback();
 
     while (ros::ok()) {
         node.fc().handleRequests();
         ros::spinOnce();
-        r.sleep();
+        node.rate().sleep();
     }
 
     ros::shutdown();
