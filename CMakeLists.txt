@@ -160,7 +160,7 @@ include_directories(
 ## Declare a C++ executable
 add_executable(multiwii_node src/multiwii_node.cpp)
 add_dependencies(multiwii_node ${PROJECT_NAME}_gencfg)
-add_dependencies(multiwii_node ${catkin_EXPORTED_TARGETS})
+add_dependencies(multiwii_node ${PROJECT_NAME}_gencpp)
 
 ## Add cmake target dependencies of the executable
 ## same as for the library above
