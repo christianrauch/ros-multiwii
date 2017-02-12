@@ -3,6 +3,9 @@
 #include <dynamic_reconfigure/server.h>
 #include <multiwii/UpdateRatesConfig.h>
 
+#include <multiwii/ReceiveMSPRawMessage.h>
+#include <multiwii/SendMSPRawMessage.h>
+
 #include <std_msgs/UInt16.h>
 #include <std_msgs/UInt32.h>
 #include <std_msgs/UInt8MultiArray.h>
@@ -95,6 +98,8 @@ private:
     ros::Subscriber motor_control_sub;
 
     ros::ServiceServer arming_srv;
+    ros::ServiceServer send_msg_srv;
+    ros::ServiceServer receive_msg_srv;
 
 public:
     MultiWiiNode() : loop_rate(100) {
@@ -184,6 +189,8 @@ public:
 
         // services
         arming_srv = nh.advertiseService("cmd/arming", &MultiWiiNode::arming, this);
+        send_msg_srv = nh.advertiseService("cmd/send_msg", &MultiWiiNode::send_raw_msg, this);
+        receive_msg_srv = nh.advertiseService("cmd/receive_msg", &MultiWiiNode::receive_raw_msg, this);
     }
 
     /**
@@ -436,6 +443,44 @@ public:
     bool arming(mavros_msgs::CommandBool::Request &req, mavros_msgs::CommandBool::Response &res) {
         res.success = (req.value) ? fcu->arm_block() : fcu->disarm_block();
         return res.success;
+    }
+
+    /**
+     * @brief receive_raw_msg request payload message from FC
+     * @param req ID of message whose payload is requested
+     * @param res received message with ID and payload (data)
+     * @return true on success
+     */
+    bool receive_raw_msg(multiwii::ReceiveMSPRawMessageRequest &req, multiwii::ReceiveMSPRawMessageResponse &res) {
+        if(!fcu->sendRequest(req.id))
+            return false;
+
+        while(true) {
+            try {
+                const msp::DataID pkg = fcu->getMSP().receiveData();
+                if(pkg.id==req.id) {
+                    res.msg.id = pkg.id;
+                    res.msg.data = pkg.data;
+                    return true;
+                }
+            }
+            catch(msp::MalformedHeader) { }
+            catch(msp::WrongCRC) { }
+            catch(msp::NoData) { }
+            // do not catch remaining excpetions to forward them to the user via the ROS service call
+        }
+    }
+
+    /**
+     * @brief send_raw_msg send payload message to FC
+     * @param req message with ID and payload (data) that is to be sent to FC
+     * @param res (unused, because the receipt depends on the message type)
+     * @return true if request has been sent successfully
+     * @return false if request could not be sent
+     */
+    bool send_raw_msg(multiwii::SendMSPRawMessageRequest &req, multiwii::SendMSPRawMessageResponse &res) {
+        if(!fcu->getMSP().sendData(req.msg.id, req.msg.data))
+            return false;
     }
 };
 

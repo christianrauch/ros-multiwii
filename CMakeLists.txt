@@ -8,6 +8,7 @@ add_definitions(-std=c++11)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
   roscpp
+  message_generation
   dynamic_reconfigure
   std_msgs
   geometry_msgs
@@ -62,6 +63,10 @@ include_directories(${Eigen_INCLUDE_DIRS})
 #   Message1.msg
 #   Message2.msg
 # )
+add_message_files(
+    FILES
+    MSPRawMessage.msg
+)
 
 ## Generate services in the 'srv' folder
 # add_service_files(
@@ -69,6 +74,11 @@ include_directories(${Eigen_INCLUDE_DIRS})
 #   Service1.srv
 #   Service2.srv
 # )
+add_service_files(
+    FILES
+    ReceiveMSPRawMessage.srv
+    SendMSPRawMessage.srv
+)
 
 ## Generate actions in the 'action' folder
 # add_action_files(
@@ -82,6 +92,9 @@ include_directories(${Eigen_INCLUDE_DIRS})
 #   DEPENDENCIES
 #   std_msgs  # Or other packages containing msgs
 # )
+generate_messages(
+    DEPENDENCIES
+)
 
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##
@@ -118,7 +131,7 @@ generate_dynamic_reconfigure_options(
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES multiwii
-#  CATKIN_DEPENDS other_catkin_pkg
+    CATKIN_DEPENDS message_runtime
 #  DEPENDS system_lib
 )
 
@@ -147,6 +160,7 @@ include_directories(
 ## Declare a C++ executable
 add_executable(multiwii_node src/multiwii_node.cpp)
 add_dependencies(multiwii_node ${PROJECT_NAME}_gencfg)
+add_dependencies(multiwii_node ${catkin_EXPORTED_TARGETS})
 
 ## Add cmake target dependencies of the executable
 ## same as for the library above
