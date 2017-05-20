@@ -348,14 +348,7 @@ public:
     void onRc(const msp::Rc &rc) {
         mavros_msgs::RCIn rc_msg;
         rc_msg.header.stamp = ros::Time::now();
-        rc_msg.channels.push_back(rc.roll);
-        rc_msg.channels.push_back(rc.pitch);
-        rc_msg.channels.push_back(rc.yaw);
-        rc_msg.channels.push_back(rc.throttle);
-        rc_msg.channels.push_back(rc.aux1);
-        rc_msg.channels.push_back(rc.aux2);
-        rc_msg.channels.push_back(rc.aux3);
-        rc_msg.channels.push_back(rc.aux4);
+        rc_msg.channels = rc.channels;
 
         rc_in_pub.publish(rc_msg);
     }
