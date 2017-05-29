@@ -445,22 +445,15 @@ public:
      * @return true on success
      */
     bool receive_raw_msg(multiwii::ReceiveMSPRawMessageRequest &req, multiwii::ReceiveMSPRawMessageResponse &res) {
-        if(!fcu->sendRequest(req.id))
-            return false;
 
-        while(true) {
-            try {
-                const msp::DataID pkg = fcu->getMSP().receiveData();
-                if(pkg.id==req.id) {
-                    res.msg.id = pkg.id;
-                    res.msg.data = pkg.data;
-                    return true;
-                }
-            }
-            catch(msp::MalformedHeader) { }
-            catch(msp::WrongCRC) { }
-            catch(msp::NoData) { }
-            // do not catch remaining excpetions to forward them to the user via the ROS service call
+        msp::ByteVector data;
+        if(fcu->request_raw(req.id, data)) {
+            res.msg.id = req.id;
+            res.msg.data = data;
+            return true;
+        }
+        else {
+            return false;
         }
     }
 
@@ -472,7 +465,7 @@ public:
      * @return false if request could not be sent
      */
     bool send_raw_msg(multiwii::SendMSPRawMessageRequest &req, multiwii::SendMSPRawMessageResponse &res) {
-        if(!fcu->getMSP().sendData(req.msg.id, req.msg.data))
+        if(!fcu->respond_raw(req.msg.id, req.msg.data))
             return false;
     }
 };
@@ -504,7 +497,7 @@ int main(int argc, char **argv) {
     node.setDynamicConfigureCallback();
 
     while (ros::ok()) {
-        node.fc().handleRequests();
+        node.fc().handle();
         ros::spinOnce();
         node.rate().sleep();
     }
