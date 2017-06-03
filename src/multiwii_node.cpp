@@ -100,6 +100,7 @@ private:
     ros::Publisher altitude_pub;
 
     ros::Subscriber rc_in_sub;
+    ros::Subscriber rc_in_sub2;
     ros::Subscriber motor_control_sub;
 
     ros::ServiceServer arming_srv;
@@ -189,7 +190,8 @@ public:
         vis_pub = nh.advertise<visualization_msgs::MarkerArray>("visualization_marker_array", 0);
 
         // subscriber
-        rc_in_sub = nh.subscribe("rc/override", 1, &MultiWiiNode::rc_override, this);
+        rc_in_sub = nh.subscribe("rc/override", 1, &MultiWiiNode::rc_override_AERT1234, this); // AERT1234
+        rc_in_sub2 = nh.subscribe("rc/override/raw", 1, &MultiWiiNode::rc_override_raw, this); // raw channel order
         motor_control_sub = nh.subscribe("actuator_control", 1, &MultiWiiNode::motor_control, this);
 
         // services
@@ -414,11 +416,15 @@ public:
     ////////////////////////////////////////////////////////////////////////////
     /// callbacks for subscribed messages
 
-    void rc_override(const mavros_msgs::OverrideRCIn &rc) {
-        std::cout<<"overriding RC:"<<std::endl;
-        std::cout<<rc.channels[0]<<" "<<rc.channels[1]<<" "<<rc.channels[2]<<" "<<rc.channels[3]<<std::endl;
+    void rc_override_AERT1234(const mavros_msgs::OverrideRCIn &rc) {
         fcu->setRc(rc.channels[0], rc.channels[1], rc.channels[2], rc.channels[3],
                    rc.channels[4], rc.channels[5], rc.channels[6], rc.channels[7]);
+    }
+
+    void rc_override_raw(const mavros_msgs::OverrideRCIn &rc) {
+        std::vector<uint16_t> channels;
+        for(const uint16_t c : rc.channels) { channels.push_back(c); }
+        fcu->setRc(channels);
     }
 
     void motor_control(const mavros_msgs::ActuatorControl &motors) {
