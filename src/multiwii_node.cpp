@@ -75,6 +75,11 @@ private:
     ros::NodeHandle nh;
     fcu::FlightController *fcu;
 
+    float acc_1g;
+    float gyro_unit;
+    float magn_gain;
+    float si_unit_1g;
+
     dynamic_reconfigure::Server<multiwii::UpdateRatesConfig> dyn_conf_srv;
 
     ros::Rate loop_rate;
@@ -126,25 +131,25 @@ public:
 
         float std_grav;
         if(nh.getParam("standard_gravity", std_grav))
-            fcu->setStandardGravity(std_grav);
+            this->si_unit_1g = std_grav;
         else
             ROS_ERROR("Parameter 'standard_gravity' not set.");
 
         float acc_1g;
         if(nh.getParam("acc_1g", acc_1g))
-            fcu->setAcc1G(acc_1g);
+            this->acc_1g = acc_1g;
         else
             ROS_ERROR("Parameter 'acc_1g' not set.");
 
         float gyro_unit;
         if(nh.getParam("gyro_unit", gyro_unit))
-            fcu->setGyroUnit(gyro_unit);
+            this->gyro_unit = gyro_unit;
         else
             ROS_ERROR("Parameter 'gyro_unit' not set.");
 
         float magn_gain;
         if(nh.getParam("magn_gain", magn_gain))
-            fcu->setMagnGain(magn_gain);
+            this->magn_gain = magn_gain;
         else
             ROS_ERROR("Parameter 'magn_gain' not set.");
     }
@@ -235,7 +240,7 @@ public:
     ////////////////////////////////////////////////////////////////////////////
     /// callbacks for published messages
 
-    void onImu(const msp::Imu &imu) {
+    void onImu(const msp::ImuRaw &imu) {
         ///////////////////////////////////
         /// IMU data
 
