@@ -399,8 +399,14 @@ public:
         std_msgs::Bool armed;
         armed.data = status.active_box_id.count(fcu->getBoxNames().at("ARM"));
 
+
         std_msgs::Bool failsave_active;
-        failsave_active.data = status.active_box_id.count(fcu->getBoxNames().at("FAILSAFE"));
+        if(fcu->isFirmwareCleanflight()) {
+            failsave_active.data = status.active_box_id.count(fcu->getBoxNames().at("FAILSAFE"));
+        }
+        else {
+            failsave_active.data = false;
+        }
 
         std_msgs::UInt8MultiArray box_ids;
         for(const uint b : status.active_box_id) {
