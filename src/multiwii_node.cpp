@@ -514,8 +514,6 @@ int main(int argc, char **argv) {
     node.setDynamicConfigureCallback();
 
     while (ros::ok()) {
-        node.fc().handle();
-        ros::spinOnce();
         node.rate().sleep();
     }
 
