@@ -82,8 +82,6 @@ private:
 
     dynamic_reconfigure::Server<multiwii::UpdateRatesConfig> dyn_conf_srv;
 
-    ros::Rate loop_rate;
-
     ros::Publisher imu_pub;
     ros::Publisher magn_pub;
     ros::Publisher pose_stamped_pub;
@@ -108,7 +106,7 @@ private:
     ros::ServiceServer receive_msg_srv;
 
 public:
-    MultiWiiNode() : loop_rate(100) {
+    MultiWiiNode() {
         // configure
         std::string device;
         int baudrate = 115200;
@@ -161,10 +159,6 @@ public:
 
     fcu::FlightController& fc() const {
         return *fcu;
-    }
-
-    ros::Rate& rate() {
-        return loop_rate;
     }
 
     void setup() {
@@ -223,9 +217,6 @@ public:
             {msp::ID::MSP_MISC, config.MSP_MISC},
             {msp::ID::MSP_ANALOG, config.MSP_ANALOG},
         };
-
-
-        loop_rate = ros::Rate(config.ros_node);
 
         // apply update
         for(const auto& r : msp_rates) {
@@ -513,9 +504,7 @@ int main(int argc, char **argv) {
     // - main ROS node loop rate
     node.setDynamicConfigureCallback();
 
-    while (ros::ok()) {
-        node.rate().sleep();
-    }
+    ros::spin();
 
     ros::shutdown();
 }
