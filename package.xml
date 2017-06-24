@@ -1,18 +1,11 @@
 <?xml version="1.0"?>
-<package>
+<package format="2">
   <name>multiwii</name>
-  <version>0.0.0</version>
+  <version>2.0.0</version>
   <description>The multiwii package</description>
 
-  <!-- One maintainer tag required, multiple allowed, one person per tag -->
-  <!-- Example:  -->
-  <!-- <maintainer email="jane.doe@example.com">Jane Doe</maintainer> -->
   <maintainer email="Rauch.Christian@gmx.de">Christian Rauch</maintainer>
 
-
-  <!-- One license tag required, multiple allowed, one license per tag -->
-  <!-- Commonly used license strings: -->
-  <!--   BSD, MIT, Boost Software License, GPLv2, GPLv3, LGPLv2.1, LGPLv3 -->
   <license>BSD</license>
 
 
@@ -21,11 +14,7 @@
   <!-- Example: -->
   <!-- <url type="website">http://wiki.ros.org/multiwii</url> -->
 
-
-  <!-- Author tags are optional, mutiple are allowed, one per tag -->
-  <!-- Authors do not have to be maintianers, but could be -->
-  <!-- Example: -->
-  <!-- <author email="jane.doe@example.com">Jane Doe</author> -->
+  <author email="Rauch.Christian@gmx.de">Christian Rauch</author>
 
 
   <!-- The *_depend tags are used to specify dependencies -->
@@ -50,10 +39,10 @@
   <build_depend>visualization_msgs</build_depend>
   <build_depend>eigen</build_depend>
 
-  <run_depend>msp</run_depend>
-  <run_depend>roscpp</run_depend>
-  <run_depend>message_runtime</run_depend>
-  <run_depend>dynamic_reconfigure</run_depend>
+  <exec_depend>msp</exec_depend>
+  <exec_depend>roscpp</exec_depend>
+  <exec_depend>message_runtime</exec_depend>
+  <exec_depend>dynamic_reconfigure</exec_depend>
   <buildtool_depend>catkin</buildtool_depend>
 
 
