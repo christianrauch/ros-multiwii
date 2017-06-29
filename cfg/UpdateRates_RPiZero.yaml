@@ -2,10 +2,10 @@
 
 /multiwii/MSP_ALTITUDE: 30
 /multiwii/MSP_ANALOG: 0.1
-/multiwii/MSP_ATTITUDE: 10
-/multiwii/MSP_MISC: 1
+/multiwii/MSP_ATTITUDE: 200
+/multiwii/MSP_MISC: 0.1
 /multiwii/MSP_MOTOR: 10
-/multiwii/MSP_RAW_IMU: 30
-/multiwii/MSP_RC: 1
+/multiwii/MSP_RAW_IMU: 100
+/multiwii/MSP_RC: 10
 /multiwii/MSP_SERVO: 1
 /multiwii/MSP_STATUS: 10
