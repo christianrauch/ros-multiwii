@@ -1,6 +1,7 @@
 <launch>
-    <param name="device" value="/dev/ttyUSB0"/>
-    <param name="baudrate" value="115200"/>
-    <rosparam command="load" file="$(find multiwii)/cfg/GY86.yaml"/>
-    <node name="multiwii" pkg="multiwii" type="multiwii_node"/>
+    <node name="multiwii" pkg="multiwii" type="multiwii_node">
+        <param name="device" value="/dev/ttyUSB0"/>
+        <param name="baudrate" value="500000"/>
+        <rosparam command="load" file="$(find multiwii)/cfg/GY86.yaml"/>
+    </node>
 </launch>

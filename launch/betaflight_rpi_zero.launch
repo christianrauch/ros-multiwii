@@ -1,10 +1,11 @@
 <launch>
-    <param name="device" value="/dev/ttyUSB0"/>
-    <!-- default cleanflight/betaflight baudrate is 115200 -->
-    <!-- increase serial baudrate and cleanflight's "serial_update_rate_hz"
-         to enable higher MSP update rates -->
-    <param name="baudrate" value="115200"/>
-    <rosparam command="load" file="$(find multiwii)/cfg/Naze32_rev6.yaml"/>
-    <rosparam command="load" file="$(find multiwii)/cfg/UpdateRates_RPiZero.yaml"/>
-    <node name="multiwii" pkg="multiwii" type="multiwii_node"/>
+    <node name="multiwii" pkg="multiwii" type="multiwii_node">
+        <param name="device" value="/dev/ttyUSB0"/>
+        <!-- default cleanflight/betaflight baudrate is 115200 -->
+        <!-- increase serial baudrate and cleanflight's "serial_update_rate_hz"
+             to enable higher MSP update rates -->
+        <param name="baudrate" value="115200"/>
+        <rosparam command="load" file="$(find multiwii)/cfg/Naze32_rev6.yaml"/>
+        <rosparam command="load" file="$(find multiwii)/cfg/UpdateRates_RPiZero.yaml"/>
+    </node>
 </launch>

@@ -76,6 +76,7 @@ private:
 
 public:
     MultiWiiNode() {
+        nh = ros::NodeHandle("~");
         // configure
         std::string device;
         int baudrate = 115200;
