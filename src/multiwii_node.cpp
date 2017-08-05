@@ -25,8 +25,6 @@
 #include <mavros_msgs/ActuatorControl.h>
 #include <mavros_msgs/CommandBool.h>
 
-#include <visualization_msgs/MarkerArray.h>
-
 #include <msp/FlightController.hpp>
 #include <msp/msp_msg.hpp>
 #include <msp/msg_print.hpp>
@@ -39,35 +37,6 @@ double deg2rad(const double deg) {
 
 double rad2deg(const double rad) {
     return rad/M_PI * 180.0;
-}
-
-visualization_msgs::Marker ArrowMarker(const Eigen::Vector3d vec, const std::array<uint,3> &colour, const std::string name) {
-    visualization_msgs::Marker arrow;
-    arrow.header.stamp = ros::Time::now();
-    arrow.header.frame_id = "multiwii";
-    arrow.ns = name;
-
-    arrow.type = visualization_msgs::Marker::ARROW;
-    arrow.action = visualization_msgs::Marker::ADD;
-
-    arrow.points.resize(2);
-    arrow.points[0].x = 0;
-    arrow.points[0].y = 0;
-    arrow.points[0].z = 0;
-    arrow.points[1].x = vec.x();
-    arrow.points[1].y = vec.y();
-    arrow.points[1].z = vec.z();
-
-    arrow.color.r = colour[0];
-    arrow.color.g = colour[1];
-    arrow.color.b = colour[2];
-    arrow.color.a = 1.0;
-
-    arrow.scale.x = 0.1;
-    arrow.scale.y = 0.1;
-    arrow.scale.z = 0.1;
-
-    return arrow;
 }
 
 class MultiWiiNode {
@@ -181,8 +150,6 @@ public:
         heading_pub = nh.advertise<std_msgs::Float64>("global_position/compass_hdg",1);
         altitude_pub = nh.advertise<std_msgs::Float64>("global_position/rel_alt",1);
 
-        vis_pub = nh.advertise<visualization_msgs::MarkerArray>("visualization_marker_array", 0);
-
         // subscriber
         rc_in_sub = nh.subscribe("rc/override", 1, &MultiWiiNode::rc_override_AERT1234, this); // AERT1234
         rc_in_sub2 = nh.subscribe("rc/override/raw", 1, &MultiWiiNode::rc_override_raw, this); // raw channel order
@@ -287,28 +254,6 @@ public:
         std_msgs::Float64 heading;
         heading.data = rad2deg(atan2(imu.magn[0], imu.magn[1]));
         heading_pub.publish(heading);
-
-        ///////////////////////////////////
-        /// visualization of IMU coordinate system axis
-
-        // publish axis of imu coordinate system
-        visualization_msgs::MarkerArray markers;
-
-        // z (blue), direction of linear acceleration
-        markers.markers.push_back(ArrowMarker(lin_acc.normalized(), {0, 0, 255}, "acc"));
-
-        // direction of magnetic field, yellow
-        markers.markers.push_back(ArrowMarker(magn.normalized(), {255, 255, 0}, "magn"));
-
-        // y (green)
-        markers.markers.push_back(ArrowMarker(
-                lin_acc.cross(magn).normalized(), {0, 255, 0}, "acc_cross_magn"));
-        // x (red)
-        markers.markers.push_back(ArrowMarker(
-                lin_acc.cross(magn).cross(lin_acc).normalized(),
-                {255, 0, 0}, "acc_cross_magn_cross_acc"));
-
-        vis_pub.publish(markers);
     }
 
     void onAttitude(const msp::Attitude &attitude) {

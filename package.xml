@@ -36,7 +36,6 @@
   <build_depend>geometry_msgs</build_depend>
   <build_depend>sensor_msgs</build_depend>
   <build_depend>mavros_msgs</build_depend>
-  <build_depend>visualization_msgs</build_depend>
   <build_depend>eigen</build_depend>
 
   <exec_depend>msp</exec_depend>

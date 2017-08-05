@@ -14,7 +14,6 @@ find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   sensor_msgs
   mavros_msgs
-  visualization_msgs
 )
 
 ## System dependencies are found with CMake's conventions
