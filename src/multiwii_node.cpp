@@ -201,7 +201,7 @@ public:
     ////////////////////////////////////////////////////////////////////////////
     /// callbacks for published messages
 
-    void onImu(const msp::ImuRaw &imu) {
+    void onImu(const msp::msg::ImuRaw &imu) {
         ///////////////////////////////////
         /// IMU data
 
@@ -257,7 +257,7 @@ public:
         heading_pub.publish(heading);
     }
 
-    void onAttitude(const msp::Attitude &attitude) {
+    void onAttitude(const msp::msg::Attitude &attitude) {
         // r,p,y to rotation matrix
         Eigen::Matrix3f rot;
         rot = Eigen::AngleAxisf(deg2rad(attitude.ang_x), Eigen::Vector3f::UnitX())
@@ -283,13 +283,13 @@ public:
         rpy_pub.publish(rpy);
     }
 
-    void onAltitude(const msp::Altitude &altitude) {
+    void onAltitude(const msp::msg::Altitude &altitude) {
         std_msgs::Float64 alt; // altitude in meter
         alt.data = altitude.altitude;
         altitude_pub.publish(alt);
     }
 
-    void onRc(const msp::Rc &rc) {
+    void onRc(const msp::msg::Rc &rc) {
         mavros_msgs::RCIn rc_msg;
         rc_msg.header.stamp = ros::Time::now();
         rc_msg.channels = rc.channels;
@@ -297,7 +297,7 @@ public:
         rc_in_pub.publish(rc_msg);
     }
 
-    void onServo(const msp::Servo &servo) {
+    void onServo(const msp::msg::Servo &servo) {
         mavros_msgs::RCOut rc;
         for(const uint16_t s : servo.servo) {
             rc.channels.push_back(s);
@@ -305,7 +305,7 @@ public:
         servo_pub.publish(rc);
     }
 
-    void onMotor(const msp::Motor &motor) {
+    void onMotor(const msp::msg::Motor &motor) {
         mavros_msgs::RCOut motor_out;
         for(const uint16_t m : motor.motor) {
             motor_out.channels.push_back(m);
@@ -313,7 +313,7 @@ public:
         motors_pub.publish(motor_out);
     }
 
-    void onMisc(const msp::Misc &misc) {
+    void onMisc(const msp::msg::Misc &misc) {
         std_msgs::UInt16 arm;
         arm.data = misc.arm;
         arm_pub.publish(arm);
@@ -323,7 +323,7 @@ public:
         lifetime_pub.publish(lifetime);
     }
 
-    void onAnalog(const msp::Analog &analog) {
+    void onAnalog(const msp::msg::Analog &analog) {
         sensor_msgs::BatteryState battery;
         battery.header.stamp = ros::Time::now();
         battery.voltage = analog.vbat;
@@ -332,7 +332,7 @@ public:
         battery_pub.publish(battery);
     }
 
-    void onStatus(const msp::Status &status) {
+    void onStatus(const msp::msg::Status &status) {
         std_msgs::Bool armed;
         armed.data = status.active_box_id.count(fcu->getBoxNames().at("ARM"));
 
@@ -376,7 +376,7 @@ public:
         // We will ignore reversed motor direction and the final motor value
         // becomes: 1000 + abs(m)*1000
 
-        std::array<uint16_t,msp::N_MOTOR> motor_values;
+        std::array<uint16_t,msp::msg::N_MOTOR> motor_values;
         for(uint i(0); i<motor_values.size(); i++) {
             motor_values[i] = 1000+abs(motors.controls[i]*1000);
         }
