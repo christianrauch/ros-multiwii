@@ -25,6 +25,8 @@
 #include <mavros_msgs/ActuatorControl.h>
 #include <mavros_msgs/CommandBool.h>
 
+#include <tf/transform_broadcaster.h>
+
 #include <msp/FlightController.hpp>
 #include <msp/msp_msg.hpp>
 #include <msp/msg_print.hpp>
@@ -275,6 +277,18 @@ public:
         pose_stamped.pose.orientation.w = quat.w();
 
         pose_stamped_pub.publish(pose_stamped);
+
+        ///////////////////////////////////
+	// Broadcast transform to relate multiwii transformation to the base frame
+        static tf::TransformBroadcaster tf_broadcaster;
+        // Convert attitude values to quaternion
+        tf::Quaternion multiwii_quaternion;
+        multiwii_quaternion.setRPY(deg2rad(attitude.ang_x), deg2rad(attitude.ang_y), deg2rad(attitude.heading));
+        // Pack attitude into tf::Transform 
+        tf::Transform multiwii_transform;
+        multiwii_transform.setRotation(multiwii_quaternion);
+        // Broadcast as tf::StampedTransform
+        tf_broadcaster.sendTransform(tf::StampedTransform(multiwii_transform, ros::Time::now(), "world", "multiwii"));
 
         geometry_msgs::Vector3 rpy;
         rpy.x = attitude.ang_x;

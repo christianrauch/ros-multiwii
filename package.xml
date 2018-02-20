@@ -37,11 +37,13 @@
   <build_depend>sensor_msgs</build_depend>
   <build_depend>mavros_msgs</build_depend>
   <build_depend>eigen</build_depend>
+  <build_depend>tf</build_depend>
 
   <exec_depend>msp</exec_depend>
   <exec_depend>roscpp</exec_depend>
   <exec_depend>message_runtime</exec_depend>
   <exec_depend>dynamic_reconfigure</exec_depend>
+  <exec_depend>tf</exec_depend>
   <buildtool_depend>catkin</buildtool_depend>
 
 
