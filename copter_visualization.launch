@@ -1,0 +1,16 @@
+<launch>
+    <node name="multiwii" pkg="multiwii" type="multiwii_node">
+        <param name="device" value="/dev/ttyACM0"/>
+        <!-- default cleanflight/betaflight baudrate is 115200 -->
+        <!-- increase serial baudrate and cleanflight's "serial_update_rate_hz"
+             to enable higher MSP update rates -->
+        <param name="baudrate" value="115200"/>
+        <rosparam command="load" file="$(find multiwii)/cfg/Naze32_rev6.yaml"/>
+        <rosparam command="load" file="$(find multiwii)/cfg/UpdateRates_RPiZero.yaml"/>
+    </node>
+    <node name="copter_viz" pkg="mavros_extras" type="copter_visualization">
+        <param name="fixed_frame_id" value="world"/>
+        <param name="child_frame_id" value="multiwii"/>
+        <remap from="/local_position" to="/multiwii/local_position/pose" />
+    </node>
+</launch>
