@@ -77,6 +77,8 @@ private:
     ros::ServiceServer send_msg_srv;
     ros::ServiceServer receive_msg_srv;
 
+    tf::TransformBroadcaster tf_broadcaster;
+
 public:
     MultiWiiNode() {
         nh = ros::NodeHandle("~");
@@ -125,11 +127,8 @@ public:
         else
             ROS_ERROR("Parameter 'magn_gain' not set.");
 
-        std::string tf_base_frame;
-        if(nh.getParam("tf_base_frame", tf_base_frame))
-            this->tf_base_frame = tf_base_frame;
-        else
-            this->tf_base_frame = "world";	// default to world if base frame not provided
+        // Get the base frame to which the TF is published
+        nh.param<std::string>("tf_base_frame", this->tf_base_frame, "map");
     }
 
     ~MultiWiiNode() {
@@ -287,7 +286,6 @@ public:
 
         ///////////////////////////////////
 	// Broadcast transform to relate multiwii transformation to the base frame
-        static tf::TransformBroadcaster tf_broadcaster;
         // Convert attitude values to quaternion
         tf::Quaternion multiwii_quaternion;
         multiwii_quaternion.setRPY(deg2rad(attitude.ang_x), deg2rad(attitude.ang_y), deg2rad(attitude.heading));
@@ -311,9 +309,10 @@ public:
 
 	///////////////////////////////////
 	// Broadcast transform to relate multiwii transformation to the base frame
-        static tf::TransformBroadcaster tf_broadcaster;
         // Pack attitude into tf::Transform 
-        tf::Transform multiwii_transform(0.0, 0.0, 0.0, 0.0);
+	tf::Quaternion multiwii_quaternion(1.0, 0.0, 0.0, 0.0);
+        tf::Transform multiwii_transform;
+        multiwii_transform.setRotation(multiwii_quaternion);
 	multiwii_transform.setOrigin(tf::Vector3(0.0, 0.0, altitude.altitude));
         // Broadcast as tf::StampedTransform
         tf_broadcaster.sendTransform(tf::StampedTransform(multiwii_transform, ros::Time::now(), this->tf_base_frame, "multiwii_cartesian"));
