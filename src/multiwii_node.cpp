@@ -292,6 +292,7 @@ public:
         // Pack attitude into tf::Transform 
         tf::Transform multiwii_transform;
         multiwii_transform.setRotation(multiwii_quaternion);
+		multiwii_transform.setOrigin(tf::Vector3(0.0, 0.0, 0.0));
         // Broadcast as tf::StampedTransform
         tf_broadcaster.sendTransform(tf::StampedTransform(multiwii_transform, ros::Time::now(), "multiwii_cartesian", "multiwii"));
 
@@ -310,7 +311,7 @@ public:
 	///////////////////////////////////
 	// Broadcast transform to relate multiwii transformation to the base frame
         // Pack attitude into tf::Transform 
-	tf::Quaternion multiwii_quaternion(1.0, 0.0, 0.0, 0.0);
+	tf::Quaternion multiwii_quaternion(0.0, 0.0, 0.0, 1.0);
         tf::Transform multiwii_transform;
         multiwii_transform.setRotation(multiwii_quaternion);
 	multiwii_transform.setOrigin(tf::Vector3(0.0, 0.0, altitude.altitude));

@@ -1,6 +1,0 @@
-<launch>
-    <node name="copter_viz" pkg="mavros_extras" type="copter_visualization">
-	<param name="child_frame_id" value="multiwii" />
-        <remap from="/local_position" to="/multiwii/local_position/pose" />
-    </node>
-</launch>
