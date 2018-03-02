@@ -285,14 +285,14 @@ public:
         pose_stamped_pub.publish(pose_stamped);
 
         ///////////////////////////////////
-	// Broadcast transform to relate multiwii transformation to the base frame
+        // Broadcast transform to relate multiwii transformation to the base frame
         // Convert attitude values to quaternion
         tf::Quaternion multiwii_quaternion;
         multiwii_quaternion.setRPY(deg2rad(attitude.ang_x), deg2rad(attitude.ang_y), deg2rad(attitude.heading));
         // Pack attitude into tf::Transform 
         tf::Transform multiwii_transform;
         multiwii_transform.setRotation(multiwii_quaternion);
-		multiwii_transform.setOrigin(tf::Vector3(0.0, 0.0, 0.0));
+        multiwii_transform.setOrigin(tf::Vector3(0.0, 0.0, 0.0));
         // Broadcast as tf::StampedTransform
         tf_broadcaster.sendTransform(tf::StampedTransform(multiwii_transform, ros::Time::now(), "multiwii_cartesian", "multiwii"));
 
@@ -308,13 +308,13 @@ public:
         alt.data = altitude.altitude;
         altitude_pub.publish(alt);
 
-	///////////////////////////////////
-	// Broadcast transform to relate multiwii transformation to the base frame
+        ///////////////////////////////////
+        // Broadcast transform to relate multiwii transformation to the base frame
         // Pack attitude into tf::Transform 
-	tf::Quaternion multiwii_quaternion(0.0, 0.0, 0.0, 1.0);
+        tf::Quaternion multiwii_quaternion(0.0, 0.0, 0.0, 1.0);
         tf::Transform multiwii_transform;
         multiwii_transform.setRotation(multiwii_quaternion);
-	multiwii_transform.setOrigin(tf::Vector3(0.0, 0.0, altitude.altitude));
+        multiwii_transform.setOrigin(tf::Vector3(0.0, 0.0, altitude.altitude));
         // Broadcast as tf::StampedTransform
         tf_broadcaster.sendTransform(tf::StampedTransform(multiwii_transform, ros::Time::now(), this->tf_base_frame, "multiwii_cartesian"));
 
