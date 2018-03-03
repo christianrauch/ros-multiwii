@@ -25,6 +25,8 @@
 #include <mavros_msgs/ActuatorControl.h>
 #include <mavros_msgs/CommandBool.h>
 
+#include <tf/transform_broadcaster.h>
+
 #include <msp/FlightController.hpp>
 #include <msp/msp_msg.hpp>
 #include <msp/msg_print.hpp>
@@ -48,6 +50,7 @@ private:
     float gyro_unit;
     float magn_gain;
     float si_unit_1g;
+    std::string tf_base_frame;
 
     dynamic_reconfigure::Server<multiwii::UpdateRatesConfig> dyn_conf_srv;
 
@@ -73,6 +76,8 @@ private:
     ros::ServiceServer arming_srv;
     ros::ServiceServer send_msg_srv;
     ros::ServiceServer receive_msg_srv;
+
+    tf::TransformBroadcaster tf_broadcaster;
 
 public:
     MultiWiiNode() {
@@ -121,6 +126,9 @@ public:
             this->magn_gain = magn_gain;
         else
             ROS_ERROR("Parameter 'magn_gain' not set.");
+
+        // Get the base frame to which the TF is published
+        nh.param<std::string>("tf_base_frame", this->tf_base_frame, "map");
     }
 
     ~MultiWiiNode() {
@@ -276,6 +284,18 @@ public:
 
         pose_stamped_pub.publish(pose_stamped);
 
+        ///////////////////////////////////
+        // Broadcast transform to relate multiwii transformation to the base frame
+        // Convert attitude values to quaternion
+        tf::Quaternion multiwii_quaternion;
+        multiwii_quaternion.setRPY(deg2rad(attitude.ang_x), deg2rad(attitude.ang_y), deg2rad(attitude.heading));
+        // Pack attitude into tf::Transform 
+        tf::Transform multiwii_transform;
+        multiwii_transform.setRotation(multiwii_quaternion);
+        multiwii_transform.setOrigin(tf::Vector3(0.0, 0.0, 0.0));
+        // Broadcast as tf::StampedTransform
+        tf_broadcaster.sendTransform(tf::StampedTransform(multiwii_transform, ros::Time::now(), "multiwii_cartesian", "multiwii"));
+
         geometry_msgs::Vector3 rpy;
         rpy.x = attitude.ang_x;
         rpy.y = attitude.ang_y;
@@ -287,6 +307,17 @@ public:
         std_msgs::Float64 alt; // altitude in meter
         alt.data = altitude.altitude;
         altitude_pub.publish(alt);
+
+        ///////////////////////////////////
+        // Broadcast transform to relate multiwii transformation to the base frame
+        // Pack attitude into tf::Transform 
+        tf::Quaternion multiwii_quaternion(0.0, 0.0, 0.0, 1.0);
+        tf::Transform multiwii_transform;
+        multiwii_transform.setRotation(multiwii_quaternion);
+        multiwii_transform.setOrigin(tf::Vector3(0.0, 0.0, altitude.altitude));
+        // Broadcast as tf::StampedTransform
+        tf_broadcaster.sendTransform(tf::StampedTransform(multiwii_transform, ros::Time::now(), this->tf_base_frame, "multiwii_cartesian"));
+
     }
 
     void onRc(const msp::msg::Rc &rc) {
