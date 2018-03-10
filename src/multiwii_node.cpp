@@ -68,6 +68,7 @@ private:
     ros::Publisher heading_pub;
     ros::Publisher vis_pub;
     ros::Publisher altitude_pub;
+    ros::Publisher sonar_altitude_pub;
 
     ros::Subscriber rc_in_sub;
     ros::Subscriber rc_in_sub2;
@@ -158,6 +159,7 @@ public:
         failsafe_status_pub = nh.advertise<std_msgs::Bool>("status/failsafe",1);
         heading_pub = nh.advertise<std_msgs::Float64>("global_position/compass_hdg",1);
         altitude_pub = nh.advertise<std_msgs::Float64>("global_position/rel_alt",1);
+        sonar_altitude_pub = nh.advertise<std_msgs::Float64>("global_position/sonar_alt", 1);
 
         // subscriber
         rc_in_sub = nh.subscribe("rc/override", 1, &MultiWiiNode::rc_override_AERT1234, this); // AERT1234
@@ -192,6 +194,7 @@ public:
             {msp::ID::MSP_SERVO, config.MSP_SERVO},
             {msp::ID::MSP_MISC, config.MSP_MISC},
             {msp::ID::MSP_ANALOG, config.MSP_ANALOG},
+            {msp::ID::MSP_SONAR_ALTITUDE, config.MSP_SONAR_ALTITUDE},
         };
 
         // apply update
@@ -317,7 +320,6 @@ public:
         multiwii_transform.setOrigin(tf::Vector3(0.0, 0.0, altitude.altitude));
         // Broadcast as tf::StampedTransform
         tf_broadcaster.sendTransform(tf::StampedTransform(multiwii_transform, ros::Time::now(), this->tf_base_frame, "multiwii_cartesian"));
-
     }
 
     void onRc(const msp::msg::Rc &rc) {
@@ -384,6 +386,22 @@ public:
         boxes_pub.publish(box_ids);
         arm_status_pub.publish(armed);
         failsafe_status_pub.publish(failsave_active);
+    }
+    
+    void onSonarAltitude(const msp::msg::SonarAltitude &sonar_altitude) {
+        std_msgs::Float64 alt;
+        alt.data = sonar_altitude.altitude;
+        sonar_altitude_pub.publish(alt);
+
+        ///////////////////////////////////
+        // Broadcast transform to relate multiwii transformation to the base frame
+        // Pack attitude into tf::Transform 
+        tf::Quaternion multiwii_quaternion(0.0, 0.0, 0.0, 1.0);
+        tf::Transform multiwii_transform;
+        multiwii_transform.setRotation(multiwii_quaternion);
+        multiwii_transform.setOrigin(tf::Vector3(0.0, 0.0, sonar_altitude.altitude));
+        // Broadcast as tf::StampedTransform
+        tf_broadcaster.sendTransform(tf::StampedTransform(multiwii_transform, ros::Time::now(), this->tf_base_frame, "multiwii_cartesian"));
     }
 
 
@@ -475,6 +493,7 @@ int main(int argc, char **argv) {
     node.fc().subscribe(&MultiWiiNode::onMisc, &node);
     node.fc().subscribe(&MultiWiiNode::onAnalog, &node);
     node.fc().subscribe(&MultiWiiNode::onStatus, &node);
+    node.fc().subscribe(&MultiWiiNode::onSonarAltitude, &node);
 
     // register callback for dynamic configuration
     // - update rates for MSP subscriber
