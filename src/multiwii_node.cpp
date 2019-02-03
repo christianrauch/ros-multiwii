@@ -3,9 +3,6 @@
 #include <dynamic_reconfigure/server.h>
 #include <multiwii/UpdateRatesConfig.h>
 
-#include <multiwii/ReceiveMSPRawMessage.h>
-#include <multiwii/SendMSPRawMessage.h>
-
 #include <std_msgs/UInt16.h>
 #include <std_msgs/UInt32.h>
 #include <std_msgs/UInt8MultiArray.h>
@@ -29,7 +26,6 @@
 
 #include <msp/FlightController.hpp>
 #include <msp/msp_msg.hpp>
-#include <msp/msg_print.hpp>
 
 #include <Eigen/Geometry>
 
@@ -60,11 +56,7 @@ private:
     ros::Publisher rpy_pub;
     ros::Publisher rc_in_pub, servo_pub;
     ros::Publisher motors_pub;
-    ros::Publisher arm_pub, lifetime_pub;
     ros::Publisher battery_pub;
-    ros::Publisher boxes_pub;
-    ros::Publisher arm_status_pub;
-    ros::Publisher failsafe_status_pub;
     ros::Publisher heading_pub;
     ros::Publisher vis_pub;
     ros::Publisher altitude_pub;
@@ -74,35 +66,13 @@ private:
     ros::Subscriber rc_in_sub2;
     ros::Subscriber motor_control_sub;
 
-    ros::ServiceServer arming_srv;
-    ros::ServiceServer send_msg_srv;
-    ros::ServiceServer receive_msg_srv;
-
     tf::TransformBroadcaster tf_broadcaster;
 
 public:
     MultiWiiNode() {
         nh = ros::NodeHandle("~");
         // configure
-        std::string device;
-        int baudrate = 115200;
-        if(nh.getParam("device", device)) {
-            if(!nh.getParam("baudrate", baudrate)) {
-                ROS_ERROR("Parameter 'baudrate' not set. Using default baudrate of %i", baudrate);
-            }
-            else {
-                if(baudrate<=0) {
-                    ROS_ERROR("'baudrate' must be positive!");
-                    baudrate = 115200;
-                }
-            }
-            fcu = new fcu::FlightController(device, uint(baudrate));
-            ROS_INFO("Connected to FCU at %s", device.c_str());
-        }
-        else {
-            fcu = NULL;
-            ROS_ERROR("Parameter 'device' not set.");
-        }
+        fcu = new fcu::FlightController();
 
         float std_grav;
         if(nh.getParam("standard_gravity", std_grav))
@@ -141,7 +111,25 @@ public:
     }
 
     void setup() {
-        fcu->initialise();
+        std::string device;
+        int baudrate = 115200;
+        if(nh.getParam("device", device)) {
+            if(!nh.getParam("baudrate", baudrate)) {
+                ROS_ERROR("Parameter 'baudrate' not set. Using default baudrate of %i", baudrate);
+            }
+            else {
+                if(baudrate<=0) {
+                    ROS_ERROR("'baudrate' must be positive!");
+                    baudrate = 115200;
+                }
+            }
+            ROS_INFO("Connected to FCU at %s", device.c_str());
+        }
+        else {
+            ROS_ERROR("Parameter 'device' not set.");
+        }
+
+        fcu->connect(device, uint(baudrate));
 
         // publisher
         imu_pub = nh.advertise<sensor_msgs::Imu>("imu/data", 1);
@@ -151,12 +139,7 @@ public:
         rc_in_pub = nh.advertise<mavros_msgs::RCIn>("rc/in", 1);
         servo_pub = nh.advertise<mavros_msgs::RCOut>("rc/servo", 1);
         motors_pub = nh.advertise<mavros_msgs::RCOut>("motors", 1);
-        arm_pub = nh.advertise<std_msgs::UInt16>("arm_counter",1);
-        lifetime_pub = nh.advertise<std_msgs::UInt32>("lifetime",1);
         battery_pub = nh.advertise<sensor_msgs::BatteryState>("battery",1);
-        boxes_pub = nh.advertise<std_msgs::UInt8MultiArray>("boxes",1);
-        arm_status_pub = nh.advertise<std_msgs::Bool>("status/armed",1);
-        failsafe_status_pub = nh.advertise<std_msgs::Bool>("status/failsafe",1);
         heading_pub = nh.advertise<std_msgs::Float64>("global_position/compass_hdg",1);
         altitude_pub = nh.advertise<std_msgs::Float64>("global_position/rel_alt",1);
         sonar_altitude_pub = nh.advertise<std_msgs::Float64>("global_position/sonar_alt", 1);
@@ -165,11 +148,6 @@ public:
         rc_in_sub = nh.subscribe("rc/override", 1, &MultiWiiNode::rc_override_AERT1234, this); // AERT1234
         rc_in_sub2 = nh.subscribe("rc/override/raw", 1, &MultiWiiNode::rc_override_raw, this); // raw channel order
         motor_control_sub = nh.subscribe("actuator_control", 1, &MultiWiiNode::motor_control, this);
-
-        // services
-        arming_srv = nh.advertiseService("cmd/arming", &MultiWiiNode::arming, this);
-        send_msg_srv = nh.advertiseService("cmd/send_msg", &MultiWiiNode::send_raw_msg, this);
-        receive_msg_srv = nh.advertiseService("cmd/receive_msg", &MultiWiiNode::receive_raw_msg, this);
     }
 
     /**
@@ -212,7 +190,7 @@ public:
     ////////////////////////////////////////////////////////////////////////////
     /// callbacks for published messages
 
-    void onImu(const msp::msg::ImuRaw &imu) {
+    void onImu(const msp::msg::RawImu &imu) {
         ///////////////////////////////////
         /// IMU data
 
@@ -231,7 +209,7 @@ public:
         imu_msg.angular_velocity.z = deg2rad(imu.gyro[2]);
 
         // rotation from direction of acceleration and magnetic field
-        const Eigen::Vector3d magn(imu.magn[0], imu.magn[1], imu.magn[2]);
+        const Eigen::Vector3d magn(imu.mag[0], imu.mag[1], imu.mag[2]);
         const Eigen::Vector3d lin_acc(imu.acc[0], imu.acc[1], imu.acc[2]);
 
         // http://www.camelsoftware.com/2016/02/20/imu-maths/
@@ -255,25 +233,25 @@ public:
         mag_msg.header.stamp = ros::Time::now();
 
         // magnetic field in uT
-        mag_msg.magnetic_field.x = imu.magn[0];
-        mag_msg.magnetic_field.y = imu.magn[1];
-        mag_msg.magnetic_field.z = imu.magn[2];
+        mag_msg.magnetic_field.x = imu.mag[0];
+        mag_msg.magnetic_field.y = imu.mag[1];
+        mag_msg.magnetic_field.z = imu.mag[2];
         magn_pub.publish(mag_msg);
 
         ///////////////////////////////////
         /// heading from magnetic field
 
         std_msgs::Float64 heading;
-        heading.data = rad2deg(atan2(imu.magn[0], imu.magn[1]));
+        heading.data = rad2deg(std::atan2(double(imu.mag[0]), double(imu.mag[1])));
         heading_pub.publish(heading);
     }
 
     void onAttitude(const msp::msg::Attitude &attitude) {
         // r,p,y to rotation matrix
         Eigen::Matrix3f rot;
-        rot = Eigen::AngleAxisf(deg2rad(attitude.ang_x), Eigen::Vector3f::UnitX())
-            * Eigen::AngleAxisf(deg2rad(attitude.ang_y),  Eigen::Vector3f::UnitY())
-            * Eigen::AngleAxisf(deg2rad(attitude.heading), Eigen::Vector3f::UnitZ());
+        rot = Eigen::AngleAxisf(deg2rad(attitude.roll), Eigen::Vector3f::UnitX())
+            * Eigen::AngleAxisf(deg2rad(attitude.pitch),  Eigen::Vector3f::UnitY())
+            * Eigen::AngleAxisf(deg2rad(attitude.yaw), Eigen::Vector3f::UnitZ());
 
         const Eigen::Quaternionf quat(rot);
 
@@ -291,8 +269,8 @@ public:
         // Broadcast transform to relate multiwii transformation to the base frame
         // Convert attitude values to quaternion
         tf::Quaternion multiwii_quaternion;
-        multiwii_quaternion.setRPY(deg2rad(attitude.ang_x), deg2rad(attitude.ang_y), deg2rad(attitude.heading));
-        // Pack attitude into tf::Transform 
+        multiwii_quaternion.setRPY(deg2rad(attitude.roll), deg2rad(attitude.pitch), deg2rad(attitude.yaw));
+        // Pack attitude into tf::Transform
         tf::Transform multiwii_transform;
         multiwii_transform.setRotation(multiwii_quaternion);
         multiwii_transform.setOrigin(tf::Vector3(0.0, 0.0, 0.0));
@@ -300,9 +278,9 @@ public:
         tf_broadcaster.sendTransform(tf::StampedTransform(multiwii_transform, ros::Time::now(), "multiwii_cartesian", "multiwii"));
 
         geometry_msgs::Vector3 rpy;
-        rpy.x = attitude.ang_x;
-        rpy.y = attitude.ang_y;
-        rpy.z = attitude.heading;
+        rpy.x = attitude.roll;
+        rpy.y = attitude.pitch;
+        rpy.z = attitude.yaw;
         rpy_pub.publish(rpy);
     }
 
@@ -313,7 +291,7 @@ public:
 
         ///////////////////////////////////
         // Broadcast transform to relate multiwii transformation to the base frame
-        // Pack attitude into tf::Transform 
+        // Pack attitude into tf::Transform
         tf::Quaternion multiwii_quaternion(0.0, 0.0, 0.0, 1.0);
         tf::Transform multiwii_transform;
         multiwii_transform.setRotation(multiwii_quaternion);
@@ -346,16 +324,6 @@ public:
         motors_pub.publish(motor_out);
     }
 
-    void onMisc(const msp::msg::Misc &misc) {
-        std_msgs::UInt16 arm;
-        arm.data = misc.arm;
-        arm_pub.publish(arm);
-
-        std_msgs::UInt32 lifetime;
-        lifetime.data = misc.lifetime;
-        lifetime_pub.publish(lifetime);
-    }
-
     void onAnalog(const msp::msg::Analog &analog) {
         sensor_msgs::BatteryState battery;
         battery.header.stamp = ros::Time::now();
@@ -365,41 +333,18 @@ public:
         battery_pub.publish(battery);
     }
 
-    void onStatus(const msp::msg::Status &status) {
-        std_msgs::Bool armed;
-        armed.data = status.active_box_id.count(fcu->getBoxNames().at("ARM"));
-
-
-        std_msgs::Bool failsave_active;
-        if(fcu->isFirmwareCleanflight()) {
-            failsave_active.data = status.active_box_id.count(fcu->getBoxNames().at("FAILSAFE"));
-        }
-        else {
-            failsave_active.data = false;
-        }
-
-        std_msgs::UInt8MultiArray box_ids;
-        for(const uint b : status.active_box_id) {
-            box_ids.data.push_back(b);
-        }
-
-        boxes_pub.publish(box_ids);
-        arm_status_pub.publish(armed);
-        failsafe_status_pub.publish(failsave_active);
-    }
-    
     void onSonarAltitude(const msp::msg::SonarAltitude &sonar_altitude) {
         std_msgs::Float64 alt;
-        alt.data = sonar_altitude.altitude;
+        alt.data = sonar_altitude.altitude_cm;
         sonar_altitude_pub.publish(alt);
 
         ///////////////////////////////////
         // Broadcast transform to relate multiwii transformation to the base frame
-        // Pack attitude into tf::Transform 
+        // Pack attitude into tf::Transform
         tf::Quaternion multiwii_quaternion(0.0, 0.0, 0.0, 1.0);
         tf::Transform multiwii_transform;
         multiwii_transform.setRotation(multiwii_quaternion);
-        multiwii_transform.setOrigin(tf::Vector3(0.0, 0.0, sonar_altitude.altitude));
+        multiwii_transform.setOrigin(tf::Vector3(0.0, 0.0, sonar_altitude.altitude_cm));
         // Broadcast as tf::StampedTransform
         tf_broadcaster.sendTransform(tf::StampedTransform(multiwii_transform, ros::Time::now(), this->tf_base_frame, "multiwii_cartesian"));
     }
@@ -432,45 +377,6 @@ public:
 
         fcu->setMotors(motor_values);
     }
-
-    ////////////////////////////////////////////////////////////////////////////
-    /// services
-
-    bool arming(mavros_msgs::CommandBool::Request &req, mavros_msgs::CommandBool::Response &res) {
-        res.success = (req.value) ? fcu->arm_block() : fcu->disarm_block();
-        return res.success;
-    }
-
-    /**
-     * @brief receive_raw_msg request payload message from FC
-     * @param req ID of message whose payload is requested
-     * @param res received message with ID and payload (data)
-     * @return true on success
-     */
-    bool receive_raw_msg(multiwii::ReceiveMSPRawMessageRequest &req, multiwii::ReceiveMSPRawMessageResponse &res) {
-
-        msp::ByteVector data;
-        if(fcu->request_raw(req.id, data)) {
-            res.msg.id = req.id;
-            res.msg.data = data;
-            return true;
-        }
-        else {
-            return false;
-        }
-    }
-
-    /**
-     * @brief send_raw_msg send payload message to FC
-     * @param req message with ID and payload (data) that is to be sent to FC
-     * @param res (unused, because the receipt depends on the message type)
-     * @return true if request has been sent successfully
-     * @return false if request could not be sent
-     */
-    bool send_raw_msg(multiwii::SendMSPRawMessageRequest &req, multiwii::SendMSPRawMessageResponse &res) {
-        if(!fcu->respond_raw(req.msg.id, req.msg.data))
-            return false;
-    }
 };
 
 int main(int argc, char **argv) {
@@ -490,9 +396,7 @@ int main(int argc, char **argv) {
     node.fc().subscribe(&MultiWiiNode::onRc, &node);
     node.fc().subscribe(&MultiWiiNode::onServo, &node);
     node.fc().subscribe(&MultiWiiNode::onMotor, &node);
-    node.fc().subscribe(&MultiWiiNode::onMisc, &node);
     node.fc().subscribe(&MultiWiiNode::onAnalog, &node);
-    node.fc().subscribe(&MultiWiiNode::onStatus, &node);
     node.fc().subscribe(&MultiWiiNode::onSonarAltitude, &node);
 
     // register callback for dynamic configuration
