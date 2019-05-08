@@ -162,15 +162,12 @@ public:
     void dynconf_callback(multiwii::UpdateRatesConfig &config, uint32_t /*level*/) {
         // define map with matching update rate per message ID
         const std::map<msp::ID, double> msp_rates = {
-            {msp::ID::MSP_STATUS, config.MSP_STATUS},
             {msp::ID::MSP_RAW_IMU, config.MSP_RAW_IMU},
             {msp::ID::MSP_ALTITUDE, config.MSP_ALTITUDE},
             {msp::ID::MSP_ATTITUDE, config.MSP_ATTITUDE},
             {msp::ID::MSP_RC, config.MSP_RC},
             {msp::ID::MSP_SERVO, config.MSP_SERVO},
             {msp::ID::MSP_MOTOR, config.MSP_MOTOR},
-            {msp::ID::MSP_SERVO, config.MSP_SERVO},
-            {msp::ID::MSP_MISC, config.MSP_MISC},
             {msp::ID::MSP_ANALOG, config.MSP_ANALOG},
             {msp::ID::MSP_SONAR_ALTITUDE, config.MSP_SONAR_ALTITUDE},
         };
@@ -179,9 +176,6 @@ public:
         for(const auto& r : msp_rates) {
             if(fcu->hasSubscription(r.first)) {
                 fcu->getSubscription(r.first)->setTimerFrequency(r.second);
-            }
-            else {
-                std::cerr<<"message ID "<<uint(r.first)<<" not subscribed"<<std::endl;
             }
         }
     }
